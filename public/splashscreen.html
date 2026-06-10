@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tarkov Questing Companion</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+        -webkit-user-select: none;
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      }
+      .card {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        padding: 26px;
+        background: #14130f;
+        border: 1px solid #34322a;
+        border-radius: 16px;
+      }
+      .title {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 3.5px;
+        text-transform: uppercase;
+        color: #8a8472;
+      }
+      .logo {
+        width: 184px;
+        height: 184px;
+        object-fit: contain;
+        filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.6));
+      }
+      .bar {
+        width: 230px;
+        height: 6px;
+        background: #24231c;
+        border-radius: 4px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      .bar::after {
+        content: "";
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #6f6440, #c9b471, #6f6440);
+        animation: slide 1.1s ease-in-out infinite;
+      }
+      @keyframes slide {
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(360%); }
+      }
+      .status {
+        height: 16px;
+        font-size: 12.5px;
+        color: #c9b471;
+        opacity: 0;
+        transition: opacity 0.4s ease;
+        text-align: center;
+      }
+      .status.show { opacity: 0.9; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="title">Tarkov Questing Companion</div>
+      <img class="logo" src="brand/logo.png" alt="Tarkov Questing Companion" />
+      <div class="bar"></div>
+      <div class="status" id="status"></div>
+    </div>
+
+    <script>
+      // frases de loading no estilo Tarkov (localizadas pelo idioma salvo).
+      var LINES = {
+        en: [
+          "Bribing Prapor for intel…",
+          "Counting roubles…",
+          "Checking extracts for campers…",
+          "Listening for footsteps…",
+          "Marking quest items on the map…",
+          "Avoiding the sniper on Reserve…",
+          "Asking Therapist for bandages…",
+          "Calculating Kappa progress…",
+          "Stashing loot in the secure container…",
+          "Negotiating with Fence…",
+          "Memorizing Scav spawns…",
+          "Plotting the safest route…",
+          "Syncing data from tarkov.dev…",
+          "Loading the maps, Cheeki Breeki…",
+        ],
+        pt: [
+          "Subornando o Prapor por informação…",
+          "Contando os rublos…",
+          "Conferindo as saídas de extração…",
+          "Escutando os passos…",
+          "Marcando os itens de quest no mapa…",
+          "Desviando do sniper na Reserve…",
+          "Pedindo bandagem pra Therapist…",
+          "Calculando o progresso da Kappa…",
+          "Guardando o loot no container seguro…",
+          "Negociando com o Fence…",
+          "Decorando os spawns de Scav…",
+          "Traçando a rota mais segura…",
+          "Sincronizando dados da tarkov.dev…",
+          "Carregando os mapas, Cheeki Breeki…",
+        ],
+      };
+
+      var lang = "en";
+      try {
+        var v = localStorage.getItem("tqc:lang:v1");
+        if (v === "pt") lang = "pt";
+      } catch (e) {}
+
+      var lines = LINES[lang].slice();
+      // embaralha pra variar a cada abertura
+      for (var i = lines.length - 1; i > 0; i--) {
+        var j = Math.floor(Math.random() * (i + 1));
+        var tmp = lines[i]; lines[i] = lines[j]; lines[j] = tmp;
+      }
+
+      var el = document.getElementById("status");
+      var idx = 0;
+      function show() {
+        el.textContent = lines[idx % lines.length];
+        el.classList.add("show");
+      }
+      show();
+      setInterval(function () {
+        el.classList.remove("show");
+        setTimeout(function () {
+          idx++;
+          show();
+        }, 400);
+      }, 2200);
+    </script>
+  </body>
+</html>

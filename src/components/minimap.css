@@ -1,0 +1,67 @@
+/* Janela do minimap: fundo transparente para os cantos arredondados deixarem
+   o jogo aparecer atrás. A classe é setada em main.tsx. */
+html.minimap-window,
+html.minimap-window body,
+html.minimap-window #root {
+  background: transparent !important;
+  overflow: hidden;
+}
+
+.minimap-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(201, 180, 113, 0.5);
+  background: #0d0c0a;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.minimap-bar {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  background: rgba(20, 19, 15, 0.85);
+  border-bottom: 1px solid rgba(52, 50, 42, 0.8);
+  cursor: move;
+  user-select: none;
+}
+
+.minimap-title {
+  font: 600 11px "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.4px;
+  color: #c9b471;
+  text-transform: uppercase;
+}
+
+.minimap-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.minimap-btn {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  color: #d8d2c2;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+}
+
+.minimap-btn:hover {
+  background: rgba(201, 180, 113, 0.2);
+}
+
+.minimap-map {
+  flex: 1;
+  background: #0d0c0a;
+}
