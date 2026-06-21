@@ -16,24 +16,30 @@ export interface LayerStyle {
 
 export interface RenderMarker {
   x: number;
+  /** altura (andar); ausente em dados antigos. Sem y => visível em todos os andares. */
+  y?: number;
   z: number;
   tooltip?: string;
   popupHtml?: string;
   /** texto exibido no mapa (ex.: nome do extract) */
   label?: string;
+  /** id do grupo de loot, para escolher o glifo do ícone */
+  iconKey?: string;
   /** zoneId da quest, para o "focar" pela lista */
   focusId?: string;
   /** taskId da quest (p/ buscar imagens/guia no hover) */
   taskId?: string;
-  /** texto exibido no tooltip da quest (nome/trader/objetivo) */
-  info?: { title: string; subtitle?: string; body?: string };
+  /** objectiveId da quest (p/ buscar a imagem do ponto específico) */
+  objectiveId?: string;
+  /** texto exibido no tooltip da quest (nome/trader/objetivo + "Objetivo i/N") */
+  info?: { title: string; subtitle?: string; body?: string; index?: number; count?: number };
 }
 
 export interface MapLayerData {
   id: string;
   style: LayerStyle;
-  /** "circle" (padrão) ou "extract" (bonequinho + nome) */
-  markerKind?: "circle" | "extract";
+  /** "circle" (padrão), "extract" (bonequinho + nome) ou "loot" (badge + glifo) */
+  markerKind?: "circle" | "extract" | "loot";
   markers: RenderMarker[];
 }
 
@@ -129,10 +135,18 @@ export function buildLayers(
     style: { color: "#c9b471", fill: "#9a8c5c", radius: 6 },
     markers: questMarkers.map((m) => ({
       x: m.x,
+      y: m.y,
       z: m.z,
       focusId: m.zoneId,
       taskId: m.taskId,
-      info: { title: m.taskName, subtitle: m.trader ?? undefined, body: m.description },
+      objectiveId: m.objectiveId,
+      info: {
+        title: m.taskName,
+        subtitle: m.trader ?? undefined,
+        body: m.description,
+        index: m.objectiveIndex,
+        count: m.objectiveCount,
+      },
     })),
   });
 
@@ -146,6 +160,7 @@ export function buildLayers(
         .filter((e) => e.faction === ef.faction)
         .map((e) => ({
           x: e.x,
+          y: e.y,
           z: e.z,
           label: e.name,
           popupHtml: `<strong>${escapeHtml(e.name)}</strong><br/>${ef.label}`,
@@ -159,6 +174,7 @@ export function buildLayers(
     style: { color: "#b07fd0", fill: "#b07fd0", radius: 6 },
     markers: (mm?.transits ?? []).map((t) => ({
       x: t.x,
+      y: t.y,
       z: t.z,
       tooltip: "Transit",
       popupHtml: `<strong>Transit</strong><br/>${escapeHtml(t.description)}`,
@@ -172,7 +188,7 @@ export function buildLayers(
       style: { color: sk.color, fill: sk.color, radius: 5 },
       markers: (mm?.spawns ?? [])
         .filter((s) => s.kind === sk.kind)
-        .map((s) => ({ x: s.x, z: s.z, tooltip: `${sk.label} spawn` })),
+        .map((s) => ({ x: s.x, y: s.y, z: s.z, tooltip: `${sk.label} spawn` })),
     });
   }
 
@@ -182,9 +198,10 @@ export function buildLayers(
     layers.push({
       id: lg.id,
       style: { color: lg.color, fill: lg.color, radius: 4 },
+      markerKind: "loot",
       markers: (mm?.loot ?? [])
         .filter((l) => set.has(l.type))
-        .map((l) => ({ x: l.x, z: l.z, tooltip: lg.label })),
+        .map((l) => ({ x: l.x, y: l.y, z: l.z, tooltip: lg.label, iconKey: lg.id })),
     });
   }
 

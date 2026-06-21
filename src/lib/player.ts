@@ -2,6 +2,7 @@
 // ícone de seta que indica para onde o player estava olhando no print.
 
 import L from "leaflet";
+import type { TarkovMapConfig } from "../maps/mapsConfig";
 
 export interface PlayerPose {
   x: number;
@@ -35,6 +36,33 @@ export function displayAngle(
 ): number | null {
   if (!pose.q) return null;
   return yawFromQuat(pose.q) + coordinateRotation + extraOffset;
+}
+
+// Calibração da seta por mapa. Alguns mapas (ex.: Factory) precisam de um ajuste
+// fino de ângulo. O valor base vem de `config.headingOffset`; um override por
+// mapa pode ser gravado no localStorage (calibração ao vivo no mapa grande), o
+// que permite afinar in-game sem rebuild e depois "bakar" o valor no config.
+const HEADING_KEY = "tqc:heading:";
+
+export function headingOffsetFor(config: TarkovMapConfig): number {
+  try {
+    const raw = localStorage.getItem(HEADING_KEY + config.key);
+    if (raw != null) {
+      const n = Number(raw);
+      if (Number.isFinite(n)) return n;
+    }
+  } catch {
+    /* ignore */
+  }
+  return config.headingOffset ?? 0;
+}
+
+export function saveHeadingOffset(mapKey: string, deg: number): void {
+  try {
+    localStorage.setItem(HEADING_KEY + mapKey, String(deg));
+  } catch {
+    /* ignore */
+  }
 }
 
 /**

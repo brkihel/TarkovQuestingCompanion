@@ -5,8 +5,20 @@ import type { TarkovMapConfig } from "../maps/mapsConfig";
 import { getCRS, getBounds, getScaledBounds, gamePos } from "../maps/leafletCrs";
 import type { MapLayerData } from "../maps/layerDefs";
 import { QUEST_LAYER_ID } from "../maps/layerDefs";
-import { displayAngle, playerIcon, type PlayerPose } from "../lib/player";
-import { extractIcon } from "../maps/markerIcons";
+import {
+  displayAngle,
+  playerIcon,
+  headingOffsetFor,
+  saveHeadingOffset,
+  type PlayerPose,
+} from "../lib/player";
+import { extractIcon, customPinIcon, lootIcon } from "../maps/markerIcons";
+import { openMarkerEditor, type EditorLabels } from "../maps/markerEditor";
+import { escapeHtml } from "../maps/layerDefs";
+import type { CustomMarker, CustomMarkerDraft } from "../lib/customMarkers";
+import type { QuestImages } from "../lib/tarkovApi";
+import { floorsForMap, defaultFloor, floorForY, showOnFloor } from "../maps/floors";
+import { FloorSwitcher } from "./FloorSwitcher";
 import { OBJECTIVE_RADIUS, type IconSize } from "../settings";
 import { ObjectiveTooltip, Lightbox, type CarouselPoint, type ObjectiveInfo } from "./QuestImageViewer";
 
@@ -16,14 +28,22 @@ interface TarkovMapProps {
   visible: Set<string>;
   focusZoneId?: string | null;
   player?: PlayerPose | null;
-  /** taskId -> imagens de localização (do guia tarkov.help, offline) */
-  questImages?: Record<string, string[]>;
+  /** imagens de localização (do guia tarkov.help, offline): por objetivo + fallback por task */
+  questImages?: QuestImages;
   /** taskId -> seoLink do guia (para abrir o guia nativo) */
   questGuides?: Record<string, string>;
   /** abre o guia nativo de uma quest (pelo seoLink) */
   onOpenGuide?: (seo: string) => void;
   /** tamanho dos marcadores de objetivo (s/m/l) */
   objectiveSize?: IconSize;
+  /** marcas customizadas do usuário (alfinetes coloridos) do mapa atual */
+  customMarkers?: CustomMarker[];
+  /** cria uma marca (clique direito numa área vazia do mapa) */
+  onAddCustomMarker?: (draft: CustomMarkerDraft) => void;
+  /** remove uma marca (clique direito sobre o alfinete) */
+  onRemoveCustomMarker?: (id: string) => void;
+  /** labels traduzidos do editor de marca */
+  markerLabels?: EditorLabels;
 }
 
 interface HoverState {
@@ -49,6 +69,10 @@ export function TarkovMap({
   questGuides,
   onOpenGuide,
   objectiveSize = "s",
+  customMarkers,
+  onAddCustomMarker,
+  onRemoveCustomMarker,
+  markerLabels,
 }: TarkovMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -59,15 +83,61 @@ export function TarkovMap({
   const questRendererRef = useRef<L.SVG | null>(null);
 
   // imagens / guias (hover) + lightbox
-  const imagesRef = useRef<Record<string, string[]>>(questImages ?? {});
-  imagesRef.current = questImages ?? {};
+  const emptyImages: QuestImages = { byObjective: {}, byTask: {} };
+  const imagesRef = useRef<QuestImages>(questImages ?? emptyImages);
+  imagesRef.current = questImages ?? emptyImages;
   const guidesRef = useRef<Record<string, string>>(questGuides ?? {});
   guidesRef.current = questGuides ?? {};
   const openGuideRef = useRef(onOpenGuide);
   openGuideRef.current = onOpenGuide;
+
+  // marcas customizadas: grupo dedicado + callbacks/labels via ref (handlers
+  // registrados uma vez na criação do mapa precisam ler sempre o valor atual).
+  const customGroupRef = useRef<L.LayerGroup | null>(null);
+  const addMarkerRef = useRef(onAddCustomMarker);
+  addMarkerRef.current = onAddCustomMarker;
+  const removeMarkerRef = useRef(onRemoveCustomMarker);
+  removeMarkerRef.current = onRemoveCustomMarker;
+  const markerLabelsRef = useRef(markerLabels);
+  markerLabelsRef.current = markerLabels;
+
   const [hover, setHover] = useState<HoverState | null>(null);
   const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
   const closeTimer = useRef<number | undefined>(undefined);
+
+  // andares (níveis): só existem em mapas multi-nível. `activeFloorId` filtra os
+  // marcadores por altura; segue o andar do jogador quando ele troca de nível.
+  const floors = floorsForMap(config.key);
+  const [activeFloorId, setActiveFloorId] = useState<string>(() =>
+    floors ? defaultFloor(floors).id : "",
+  );
+  const lastPlayerFloorRef = useRef<string | null>(null);
+  const activeFloorIdRef = useRef(activeFloorId);
+  activeFloorIdRef.current = activeFloorId;
+  // SVG inline do mapa (multi-andar): para acender o andar ativo e apagar (alpha)
+  // os outros, controlando a opacidade de cada grupo <g> de andar.
+  const svgRootRef = useRef<SVGSVGElement | null>(null);
+  const ALPHA_INACTIVE = 0.16;
+  const applyFloorOpacity = (root: SVGSVGElement, fls: typeof floors, active: string) => {
+    if (!fls) return;
+    for (const f of fls) {
+      const g = root.querySelector<SVGElement>(`[id="${f.svgGroup}"]`);
+      if (!g) continue;
+      g.style.transition = "opacity 0.2s ease";
+      g.style.opacity = f.id === active ? "1" : String(ALPHA_INACTIVE);
+    }
+  };
+
+  // calibração da seta do jogador (offset em graus, por mapa). Ajustável ao vivo
+  // com [ e ] (e \ reseta) quando há jogador no mapa — útil pro Factory.
+  const [headingOffset, setHeadingOffset] = useState<number>(() => headingOffsetFor(config));
+
+  useEffect(() => {
+    const f = floorsForMap(config.key);
+    setActiveFloorId(f ? defaultFloor(f).id : "");
+    lastPlayerFloorRef.current = null;
+    setHeadingOffset(headingOffsetFor(config));
+  }, [config]);
 
   const cancelClose = () => {
     if (closeTimer.current !== undefined) {
@@ -104,7 +174,25 @@ export function TarkovMap({
     map.createPane("playerPane").style.zIndex = "700";
     questRendererRef.current = L.svg({ pane: "questPane" });
 
-    if (config.svgPath) {
+    let cancelled = false;
+    if (config.svgPath && floors) {
+      // mapa multi-andar: SVG inline para controlar a opacidade de cada andar.
+      fetch(config.svgPath)
+        .then((r) => r.text())
+        .then((txt) => {
+          if (cancelled || mapRef.current !== map) return;
+          const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+          const svgEl = doc.documentElement as unknown as SVGSVGElement;
+          // estica exatamente pro box (igual ao imageOverlay), senão desalinha.
+          svgEl.setAttribute("preserveAspectRatio", "none");
+          svgRootRef.current = svgEl;
+          L.svgOverlay(svgEl, bounds, { interactive: false }).addTo(map);
+          applyFloorOpacity(svgEl, floors, activeFloorIdRef.current);
+        })
+        .catch(() => {
+          if (!cancelled && config.svgPath) L.imageOverlay(config.svgPath, bounds).addTo(map);
+        });
+    } else if (config.svgPath) {
       L.imageOverlay(config.svgPath, bounds).addTo(map);
     } else if (config.tilePath) {
       L.tileLayer(config.tilePath, {
@@ -125,15 +213,36 @@ export function TarkovMap({
     map.on("movestart", closeHover);
     map.on("zoomstart", closeHover);
 
+    // clique direito numa área vazia: abre o editor para criar uma marca.
+    const onContext = (e: L.LeafletMouseEvent) => {
+      L.DomEvent.preventDefault(e.originalEvent); // sem o menu nativo do browser
+      const labels = markerLabelsRef.current;
+      if (!labels || !addMarkerRef.current) return;
+      openMarkerEditor(map, e.latlng, labels, (r) => {
+        addMarkerRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng, ...r });
+      });
+    };
+    map.on("contextmenu", onContext);
+
     mapRef.current = map;
     playerRef.current = null; // marcador do jogador some com o mapa antigo
     return () => {
+      cancelled = true;
+      svgRootRef.current = null;
       map.remove();
       mapRef.current = null;
       groupsRef.current.clear();
       focusIndex.current.clear();
     };
   }, [config]);
+
+  // (A2) acende o andar ativo e apaga (alpha) os outros no SVG inline.
+  useEffect(() => {
+    if (svgRootRef.current && floors) {
+      applyFloorOpacity(svgRootRef.current, floors, activeFloorId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFloorId, config]);
 
   // (P) marcador do jogador (seta de direção).
   useEffect(() => {
@@ -146,7 +255,15 @@ export function TarkovMap({
       }
       return;
     }
-    const angle = displayAngle(player, config.coordinateRotation);
+    // o jogador troca o andar ativo ao mudar de nível (override manual segue até lá).
+    if (floors) {
+      const pf = floorForY(floors, player.y);
+      if (pf.id !== lastPlayerFloorRef.current) {
+        lastPlayerFloorRef.current = pf.id;
+        setActiveFloorId(pf.id);
+      }
+    }
+    const angle = displayAngle(player, config.coordinateRotation, headingOffset);
     const latlng = gamePos(player.x, player.z) as L.LatLngExpression;
     if (!playerRef.current) {
       playerRef.current = L.marker(latlng, {
@@ -158,6 +275,24 @@ export function TarkovMap({
       playerRef.current.setLatLng(latlng);
       playerRef.current.setIcon(playerIcon(angle, true));
     }
+  }, [player, config, headingOffset]);
+
+  // calibração ao vivo da seta: [ e ] giram, \ reseta. Só quando há jogador.
+  useEffect(() => {
+    if (!player) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "[" && e.key !== "]" && e.key !== "\\") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      setHeadingOffset((cur) => {
+        const next =
+          e.key === "\\" ? config.headingOffset ?? 0 : cur + (e.key === "]" ? 5 : -5);
+        saveHeadingOffset(config.key, next);
+        return next;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, [player, config]);
 
   // (B) (re)constrói os LayerGroups quando os dados das camadas mudam.
@@ -174,17 +309,27 @@ export function TarkovMap({
       const group = L.layerGroup();
       const quest = isQuestLayer(layer.id);
       for (const m of layer.markers) {
+        // filtro por andar (mapas multi-nível): some marcadores das camadas densas
+        // (loot/spawns/extracts/transits) de outros níveis. Quests ficam sempre
+        // visíveis (são poucas e o "focar" pela lista depende delas existirem).
+        if (!quest && floors && !showOnFloor(floors, activeFloorId, m.y)) continue;
+        // quests de outros andares: não somem, ficam em alpha (transparente).
+        const questFaded =
+          quest && !!floors && m.y != null && floorForY(floors, m.y).id !== activeFloorId;
         const latlng = gamePos(m.x, m.z) as L.LatLngExpression;
         let marker: L.CircleMarker | L.Marker;
         if (layer.markerKind === "extract") {
           marker = L.marker(latlng, { icon: extractIcon(layer.style.color, m.label ?? "") });
+        } else if (layer.markerKind === "loot") {
+          marker = L.marker(latlng, { icon: lootIcon(layer.style.color, m.iconKey ?? "") });
         } else {
           marker = L.circleMarker(latlng, {
             radius: quest ? OBJECTIVE_RADIUS[objectiveSize] : layer.style.radius,
             color: layer.style.color,
             weight: 2,
             fillColor: layer.style.fill,
-            fillOpacity: 0.85,
+            fillOpacity: questFaded ? 0.18 : 0.85,
+            opacity: questFaded ? 0.3 : 1,
             // objetivos num pane de z maior, para ficarem acima dos outros
             ...(quest && questRendererRef.current ? { renderer: questRendererRef.current } : {}),
           });
@@ -197,16 +342,21 @@ export function TarkovMap({
         // marcador de quest: tooltip unificado no hover (texto + imagens + guia).
         if (m.taskId) {
           const taskId = m.taskId;
+          const objectiveId = m.objectiveId;
           const info = m.info;
           marker.on("mouseover", (e) => {
             const map = mapRef.current;
             if (!map) return;
             const p = map.latLngToContainerPoint((e.target as L.CircleMarker).getLatLng());
             cancelClose();
+            // imagem do ponto específico (objetivo); cai pro carrossel da quest
+            const imgs = imagesRef.current;
+            const byObj = objectiveId ? imgs.byObjective[objectiveId] : undefined;
+            const images = byObj && byObj.length ? byObj : imgs.byTask[taskId] ?? [];
             setHover({
               taskId,
               info,
-              images: imagesRef.current[taskId] ?? [],
+              images,
               seo: guidesRef.current[taskId],
               point: { x: p.x, y: p.y },
             });
@@ -222,7 +372,7 @@ export function TarkovMap({
     }
     // visible é tratado na effect (C); aqui só respeitamos o estado inicial.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layers, objectiveSize]);
+  }, [layers, objectiveSize, activeFloorId]);
 
   // (C) liga/desliga camadas conforme o filtro (sem reconstruir).
   useEffect(() => {
@@ -246,9 +396,41 @@ export function TarkovMap({
     cm.openPopup();
   }, [focusZoneId, config]);
 
+  // (E) marcas customizadas do usuário (alfinetes coloridos). Grupo próprio,
+  // recriado quando a lista muda. Clique direito no alfinete remove a marca.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    customGroupRef.current?.removeFrom(map);
+    const group = L.layerGroup();
+    for (const cm of customMarkers ?? []) {
+      const marker = L.marker([cm.lat, cm.lng], { icon: customPinIcon(cm.color, cm.icon) });
+      if (cm.note) marker.bindTooltip(escapeHtml(cm.note), { direction: "top" });
+      marker.on("contextmenu", (e) => {
+        L.DomEvent.stop(e); // não deixa abrir o editor de criação por baixo
+        removeMarkerRef.current?.(cm.id);
+      });
+      marker.addTo(group);
+    }
+    group.addTo(map);
+    customGroupRef.current = group;
+    return () => {
+      group.removeFrom(map);
+      customGroupRef.current = null;
+    };
+  }, [customMarkers, config]);
+
   return (
     <>
       <div ref={containerRef} className="tarkov-map" />
+      {floors && (
+        <FloorSwitcher floors={floors} activeId={activeFloorId} onSelect={setActiveFloorId} />
+      )}
+      {player && (
+        <div className="heading-cal" title="Calibrar a seta do jogador: [ e ] giram, \ reseta">
+          ↻ {Math.round(headingOffset)}°<span className="heading-cal-hint"> [ ]</span>
+        </div>
+      )}
       {hover && (
         <ObjectiveTooltip
           key={hover.taskId}

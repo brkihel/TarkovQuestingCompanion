@@ -14,6 +14,9 @@ export interface ObjectiveInfo {
   title: string;
   subtitle?: string;
   body?: string;
+  /** posição do objetivo na quest (1-based) e total — exibido como "Objetivo i/N" */
+  index?: number;
+  count?: number;
 }
 
 interface TooltipProps {
@@ -54,6 +57,11 @@ export function ObjectiveTooltip({
         <div className="obj-text">
           <strong className="obj-title">{info.title}</strong>
           {info.subtitle && <span className="obj-sub">{info.subtitle}</span>}
+          {info.count != null && info.count > 1 && (
+            <span className="obj-objnum">
+              {t("objective.badge")} {info.index}/{info.count}
+            </span>
+          )}
           {info.body && <p className="obj-body">{info.body}</p>}
         </div>
       )}

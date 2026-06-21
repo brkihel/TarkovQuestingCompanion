@@ -23,6 +23,8 @@ export interface TarkovMapConfig {
   bounds: [[number, number], [number, number]];
   transform: [number, number, number, number];
   coordinateRotation: number;
+  /** ajuste fino do ângulo da seta do jogador (graus), calibrado por mapa */
+  headingOffset?: number;
 }
 
 export const MAPS: TarkovMapConfig[] = [

@@ -4,6 +4,8 @@
 
 export interface Position {
   x: number;
+  /** altura (andar) — usada para filtrar marcadores por nível do mapa */
+  y: number;
   z: number;
 }
 
@@ -51,10 +53,10 @@ export interface Task {
 export type Faction = "pmc" | "scav" | "shared";
 export type SpawnKind = "boss" | "sniper" | "pmc" | "scav";
 
-export interface ExtractMarker { x: number; z: number; name: string; faction: Faction }
-export interface TransitMarker { x: number; z: number; description: string }
-export interface SpawnMarker { x: number; z: number; kind: SpawnKind }
-export interface LootMarker { x: number; z: number; type: string }
+export interface ExtractMarker { x: number; y?: number; z: number; name: string; faction: Faction }
+export interface TransitMarker { x: number; y?: number; z: number; description: string }
+export interface SpawnMarker { x: number; y?: number; z: number; kind: SpawnKind }
+export interface LootMarker { x: number; y?: number; z: number; type: string }
 
 export interface MapMarkers {
   extracts: ExtractMarker[];
@@ -112,16 +114,30 @@ export async function fetchQuestGuides(): Promise<Record<string, string>> {
   return f.guides ?? {};
 }
 
-// --- imagens de localização por task (do guia tarkov.help, baixadas offline) ---
+// --- imagens de localização por task/objetivo (do guia tarkov.help, offline) ---
+// `byObjective` mapeia objectiveId -> imagens daquele ponto específico (casado
+// pelo alt/legenda do guia). `byTask` é o fallback com TODAS as imagens da quest.
+export interface QuestImages {
+  byObjective: Record<string, string[]>;
+  byTask: Record<string, string[]>;
+}
+
 interface QuestImagesFile {
   source: string;
   syncedAt: string;
-  images: Record<string, string[]>;
+  /** formato novo */
+  byObjective?: Record<string, string[]>;
+  byTask?: Record<string, string[]>;
+  /** formato antigo (compatibilidade): só por task */
+  images?: Record<string, string[]>;
 }
 
-export async function fetchQuestImages(): Promise<Record<string, string[]>> {
+export async function fetchQuestImages(): Promise<QuestImages> {
   const f = await loadJson<QuestImagesFile>("/data/quest-images.json");
-  return f.images ?? {};
+  return {
+    byObjective: f.byObjective ?? {},
+    byTask: f.byTask ?? f.images ?? {},
+  };
 }
 
 // --- conteúdo dos guias (renderizado nativamente no app) ---
@@ -156,7 +172,13 @@ export interface QuestMarker {
   optional: boolean;
   trader: string | null;
   x: number;
+  /** altura (andar); ausente em dados antigos (pré-sync com y) */
+  y?: number;
   z: number;
+  /** posição do objetivo entre os objetivos geolocalizados da quest neste mapa (1-based) */
+  objectiveIndex: number;
+  /** total de objetivos geolocalizados da quest neste mapa */
+  objectiveCount: number;
 }
 
 /**
@@ -167,11 +189,25 @@ export function markersForMap(tasks: Task[], mapKeys: string[]): QuestMarker[] {
   const accepted = new Set(mapKeys);
   const markers: QuestMarker[] = [];
   for (const task of tasks) {
+    // marcadores desta task neste mapa + ordem dos objetivos geolocalizados
+    // (vários marcadores podem compartilhar o mesmo objectiveId: ex. itens de
+    // quest com múltiplos locais de coleta contam como UM objetivo).
+    const taskMarkers: QuestMarker[] = [];
+    const objOrder: string[] = [];
+    const seenObj = new Set<string>();
+    const noteObj = (id: string) => {
+      if (!seenObj.has(id)) {
+        seenObj.add(id);
+        objOrder.push(id);
+      }
+    };
+
     for (const obj of task.objectives) {
       for (const zone of obj.zones ?? []) {
         if (!zone.position) continue;
         if (!zone.map || !accepted.has(zone.map.normalizedName)) continue;
-        markers.push({
+        noteObj(obj.id);
+        taskMarkers.push({
           taskId: task.id,
           taskName: task.name,
           objectiveId: obj.id,
@@ -181,15 +217,19 @@ export function markersForMap(tasks: Task[], mapKeys: string[]): QuestMarker[] {
           optional: obj.optional,
           trader: task.trader?.name ?? null,
           x: zone.position.x,
+          y: zone.position.y,
           z: zone.position.z,
+          objectiveIndex: 0,
+          objectiveCount: 0,
         });
       }
       // Itens de quest (findQuestItem): cada local possível de coleta vira um
       // marcador. Não têm `zone`, então sintetizamos um id estável.
       for (const loc of obj.possibleLocations ?? []) {
         if (!loc.map || !accepted.has(loc.map.normalizedName)) continue;
+        noteObj(obj.id);
         loc.positions.forEach((pos, i) => {
-          markers.push({
+          taskMarkers.push({
             taskId: task.id,
             taskName: task.name,
             objectiveId: obj.id,
@@ -199,10 +239,22 @@ export function markersForMap(tasks: Task[], mapKeys: string[]): QuestMarker[] {
             optional: obj.optional,
             trader: task.trader?.name ?? null,
             x: pos.x,
+            y: pos.y,
             z: pos.z,
+            objectiveIndex: 0,
+            objectiveCount: 0,
           });
         });
       }
+    }
+
+    // numera os objetivos da quest (1-based) na ordem em que aparecem no mapa.
+    const indexOf = new Map(objOrder.map((id, i) => [id, i + 1]));
+    const count = objOrder.length;
+    for (const m of taskMarkers) {
+      m.objectiveIndex = indexOf.get(m.objectiveId) ?? 1;
+      m.objectiveCount = count;
+      markers.push(m);
     }
   }
   return markers;

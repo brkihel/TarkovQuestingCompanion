@@ -31,6 +31,11 @@ const en: Dict = {
   "hotkeys.mapFront": "map in front of game",
   "hotkeys.minimap": "minimap",
   "hotkeys.clickThrough": "click-through",
+  "hotkeys.customMarker": "right-click map: add/remove a marker",
+
+  "marker.editorTitle": "New marker",
+  "marker.add": "Add",
+  "marker.notePlaceholder": "Note (optional)",
 
   "state.loading": "Loading local data…",
   "state.error": "Error",
@@ -45,6 +50,7 @@ const en: Dict = {
   "storyline.intro": "Story progression quests, in order. They have no map markers — open a quest to read its guide.",
   "quests.viewGuide": "Open guide on tarkov.help",
   "quests.level": "Lvl",
+  "objective.badge": "Objective",
   "image.open": "Click to enlarge",
   "image.close": "Close",
   "image.prev": "Previous",
@@ -107,6 +113,11 @@ const pt: Dict = {
   "hotkeys.mapFront": "mapa na frente do jogo",
   "hotkeys.minimap": "minimap",
   "hotkeys.clickThrough": "click-through",
+  "hotkeys.customMarker": "clique direito no mapa: adicionar/remover marca",
+
+  "marker.editorTitle": "Nova marca",
+  "marker.add": "Adicionar",
+  "marker.notePlaceholder": "Nota (opcional)",
 
   "state.loading": "Carregando dados locais…",
   "state.error": "Erro",
@@ -121,6 +132,7 @@ const pt: Dict = {
   "storyline.intro": "Quests de progressão da história, em ordem. Não têm marcador no mapa — abra uma quest para ler o guia.",
   "quests.viewGuide": "Abrir guia no tarkov.help",
   "quests.level": "Nv",
+  "objective.badge": "Objetivo",
   "image.open": "Clique para ampliar",
   "image.close": "Fechar",
   "image.prev": "Anterior",

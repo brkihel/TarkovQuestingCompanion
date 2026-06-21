@@ -10,6 +10,13 @@ import type { PlayerPose } from "./lib/player";
 import { MAPS, DEFAULT_MAP_KEY, getMapByKey } from "./maps/mapsConfig";
 import { buildLayers, defaultVisibleIds } from "./maps/layerDefs";
 import {
+  loadCustomMarkers,
+  saveCustomMarkers,
+  newMarkerId,
+  type CustomMarker,
+  type CustomMarkerDraft,
+} from "./lib/customMarkers";
+import {
   fetchTasks,
   fetchMapMarkers,
   fetchStoryline,
@@ -19,6 +26,7 @@ import {
   type Task,
   type AllMapMarkers,
   type StorylineQuest,
+  type QuestImages,
 } from "./lib/tarkovApi";
 import "./App.css";
 
@@ -56,7 +64,7 @@ function App() {
   const [mapMarkers, setMapMarkers] = useState<AllMapMarkers>({});
   const [storyline, setStoryline] = useState<StorylineQuest[]>([]);
   const [guides, setGuides] = useState<Record<string, string>>({});
-  const [questImages, setQuestImages] = useState<Record<string, string[]>>({});
+  const [questImages, setQuestImages] = useState<QuestImages>({ byObjective: {}, byTask: {} });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [focusZoneId, setFocusZoneId] = useState<string | null>(null);
@@ -67,9 +75,33 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guideSeo, setGuideSeo] = useState<string | null>(null);
   const [questTab, setQuestTab] = useState<"map" | "storyline">("map");
+  const [customMarkers, setCustomMarkers] = useState<CustomMarker[]>(() =>
+    loadCustomMarkers(DEFAULT_MAP_KEY),
+  );
   const { t, iconSize } = useSettings();
 
   const config = useMemo(() => getMapByKey(mapKey), [mapKey]);
+
+  // marcas customizadas: recarrega ao trocar de mapa (são persistidas por mapa).
+  useEffect(() => {
+    setCustomMarkers(loadCustomMarkers(mapKey));
+  }, [mapKey]);
+
+  const addCustomMarker = (draft: CustomMarkerDraft) => {
+    setCustomMarkers((prev) => {
+      const next = [...prev, { id: newMarkerId(), ...draft }];
+      saveCustomMarkers(mapKey, next);
+      return next;
+    });
+  };
+
+  const removeCustomMarker = (id: string) => {
+    setCustomMarkers((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      saveCustomMarkers(mapKey, next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     let alive = true;
@@ -272,6 +304,7 @@ function App() {
           <div className="hotkeys">
             <span><kbd>Shift+M</kbd> {t("hotkeys.mapFront")}</span>
             <span><kbd>Shift+N</kbd> {t("hotkeys.minimap")} · <kbd>F9</kbd> {t("hotkeys.clickThrough")}</span>
+            <span className="hotkeys-marker">🖱️ {t("hotkeys.customMarker")}</span>
           </div>
         </div>
 
@@ -389,6 +422,14 @@ function App() {
           questGuides={guides}
           onOpenGuide={setGuideSeo}
           objectiveSize={iconSize}
+          customMarkers={customMarkers}
+          onAddCustomMarker={addCustomMarker}
+          onRemoveCustomMarker={removeCustomMarker}
+          markerLabels={{
+            title: t("marker.editorTitle"),
+            add: t("marker.add"),
+            notePlaceholder: t("marker.notePlaceholder"),
+          }}
         />
       </main>
 

@@ -113,10 +113,10 @@ async function run() {
   const mapData = await gql(`{
     maps(lang: en) {
       normalizedName
-      extracts { name faction position { x z } }
-      transits { description position { x z } }
-      spawns { sides categories position { x z } }
-      lootContainers { lootContainer { normalizedName } position { x z } }
+      extracts { name faction position { x y z } }
+      transits { description position { x y z } }
+      spawns { sides categories position { x y z } }
+      lootContainers { lootContainer { normalizedName } position { x y z } }
     }
   }`);
   const byName = new Map(mapData.maps.map((m) => [m.normalizedName, m]));
@@ -128,17 +128,17 @@ async function run() {
     markers[cfg.key] = {
       extracts: (m.extracts ?? [])
         .filter((e) => e.position)
-        .map((e) => ({ x: e.position.x, z: e.position.z, name: e.name, faction: e.faction })),
+        .map((e) => ({ x: e.position.x, y: e.position.y, z: e.position.z, name: e.name, faction: e.faction })),
       transits: (m.transits ?? [])
         .filter((t) => t.position)
-        .map((t) => ({ x: t.position.x, z: t.position.z, description: t.description })),
+        .map((t) => ({ x: t.position.x, y: t.position.y, z: t.position.z, description: t.description })),
       spawns: (m.spawns ?? [])
         .filter((s) => s.position)
-        .map((s) => ({ x: s.position.x, z: s.position.z, kind: spawnKind(s) }))
+        .map((s) => ({ x: s.position.x, y: s.position.y, z: s.position.z, kind: spawnKind(s) }))
         .filter((s) => s.kind),
       loot: (m.lootContainers ?? [])
         .filter((l) => l.position && l.lootContainer)
-        .map((l) => ({ x: l.position.x, z: l.position.z, type: l.lootContainer.normalizedName })),
+        .map((l) => ({ x: l.position.x, y: l.position.y, z: l.position.z, type: l.lootContainer.normalizedName })),
     };
     const c = markers[cfg.key];
     console.log(`  ✓ ${cfg.key}: ext=${c.extracts.length} tr=${c.transits.length} spawn=${c.spawns.length} loot=${c.loot.length}`);
@@ -153,13 +153,13 @@ async function run() {
       objectives {
         __typename id type description optional
         maps { normalizedName }
-        ... on TaskObjectiveBasic { zones { id position { x z } map { normalizedName } } }
+        ... on TaskObjectiveBasic { zones { id position { x y z } map { normalizedName } } }
         ... on TaskObjectiveQuestItem {
-          zones { id position { x z } map { normalizedName } }
-          possibleLocations { map { normalizedName } positions { x z } }
+          zones { id position { x y z } map { normalizedName } }
+          possibleLocations { map { normalizedName } positions { x y z } }
         }
-        ... on TaskObjectiveItem { zones { id position { x z } map { normalizedName } } }
-        ... on TaskObjectiveMark { zones { id position { x z } map { normalizedName } } }
+        ... on TaskObjectiveItem { zones { id position { x y z } map { normalizedName } } }
+        ... on TaskObjectiveMark { zones { id position { x y z } map { normalizedName } } }
       }
     }
   }`);

@@ -552,6 +552,65 @@ body {
   background: #0d0c0a;
 }
 
+/* ---- Seletor de andar (mapas multi-nível) ---- */
+.floor-switcher {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 800;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel, #1c1b17) 88%, transparent);
+  border: 1px solid var(--border, #3a382f);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.floor-btn {
+  min-width: 78px;
+  padding: 5px 10px;
+  font: 600 12px "Segoe UI", system-ui, sans-serif;
+  color: var(--muted, #b8b29a);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.floor-btn:hover {
+  color: var(--text, #e8e4d4);
+  background: color-mix(in srgb, var(--accent-bright, #c9b471) 12%, transparent);
+}
+
+.floor-btn.active {
+  color: #0d0c0a;
+  background: var(--accent-bright, #c9b471);
+  border-color: var(--accent-bright, #c9b471);
+}
+
+/* ---- Indicador de calibração da seta (aparece só com jogador) ---- */
+.heading-cal {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font: 600 12px "Segoe UI", system-ui, sans-serif;
+  color: var(--text, #e8e4d4);
+  background: color-mix(in srgb, var(--panel, #1c1b17) 88%, transparent);
+  border: 1px solid var(--border, #3a382f);
+  user-select: none;
+}
+
+.heading-cal-hint {
+  color: var(--muted, #b8b29a);
+  font-weight: 400;
+}
+
 /* ---- Painel de filtros ---- */
 .filters {
   display: flex;
@@ -747,6 +806,154 @@ input[type="checkbox"] {
   pointer-events: none;
 }
 
+/* ---- Marcadores de loot (badge colorido + glifo do tipo) ---- */
+.loot-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #0d0c0a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.loot-icon svg {
+  display: block;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.8));
+}
+
+/* ---- Marcas customizadas (alfinetes coloridos) ---- */
+.custom-pin {
+  position: relative;
+  width: 28px;
+  height: 37px;
+}
+
+.custom-pin svg {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
+.custom-pin-icon {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28px;
+  height: 23px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* editor (popup do Leaflet) */
+.cm-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 168px;
+}
+
+.cm-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.cm-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cm-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.cm-swatch.sel {
+  border-color: var(--text);
+  box-shadow: 0 0 0 1px var(--bg) inset;
+}
+
+.cm-ico {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.cm-ico.sel {
+  border-color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent-bright) 16%, transparent);
+}
+
+.cm-note {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 7px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.cm-note:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.cm-add {
+  background: var(--accent-bright);
+  color: #1a1813;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.cm-add:hover {
+  filter: brightness(1.08);
+}
+
+/* popup do editor no tema escuro */
+.cm-popup .leaflet-popup-content-wrapper {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.cm-popup .leaflet-popup-content {
+  margin: 11px 12px;
+}
+
+.cm-popup .leaflet-popup-tip {
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.hotkeys-marker {
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+  padding-top: 4px;
+}
+
 /* Leaflet controls em tema escuro */
 .leaflet-bar a {
   background: var(--panel-2);
@@ -804,6 +1011,19 @@ input[type="checkbox"] {
 .obj-sub {
   font-size: 11px;
   color: var(--muted);
+}
+
+.obj-objnum {
+  align-self: flex-start;
+  margin-top: 1px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent-bright) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-bright) 40%, transparent);
 }
 
 .obj-body {

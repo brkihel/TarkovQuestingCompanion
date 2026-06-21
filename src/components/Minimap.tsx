@@ -6,7 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getMapByKey } from "../maps/mapsConfig";
 import { getCRS, getBounds, gamePos } from "../maps/leafletCrs";
 import { fetchTasks, markersForMap, type Task } from "../lib/tarkovApi";
-import { displayAngle, playerIcon, type PlayerPose } from "../lib/player";
+import { displayAngle, playerIcon, headingOffsetFor, type PlayerPose } from "../lib/player";
 import { useT } from "../settings";
 import "./minimap.css";
 
@@ -52,7 +52,7 @@ export function Minimap() {
     lastPoseRef.current = pose;
     const map = mapRef.current;
     if (!map) return;
-    const angle = displayAngle(pose, configRef.current.coordinateRotation);
+    const angle = displayAngle(pose, configRef.current.coordinateRotation, headingOffsetFor(configRef.current));
     const latlng = gamePos(pose.x, pose.z) as L.LatLngExpression;
     if (!playerRef.current) {
       playerRef.current = L.marker(latlng, { icon: playerIcon(angle), zIndexOffset: 1000 }).addTo(map);
