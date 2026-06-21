@@ -9,6 +9,8 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::RecvTimeoutError;
+use std::time::Duration;
 
 use notify::{EventKind, RecursiveMode, Watcher};
 use tauri::{AppHandle, Emitter};
@@ -107,8 +109,11 @@ fn newest_app_log(logs: &Path) -> Option<PathBuf> {
 }
 
 /// Lê os bytes novos de um application log (a partir de `offset`) e devolve a
-/// ÚLTIMA location reconhecida no trecho — i.e. o mapa mais recente. Atualiza
-/// `offset` para o fim do arquivo (lidando com rotação/truncamento).
+/// ÚLTIMA location reconhecida no trecho — i.e. o mapa mais recente.
+///
+/// Avança `offset` apenas até a ÚLTIMA quebra de linha lida: assim, uma linha
+/// ainda em escrita (parcial) não é consumida pela metade e é relida inteira no
+/// próximo evento. Lida com rotação/truncamento e com bytes não-UTF-8.
 fn last_location_since(path: &Path, offset: &mut u64) -> Option<&'static str> {
     let mut file = std::fs::File::open(path).ok()?;
     let len = file.metadata().ok()?.len();
@@ -116,12 +121,20 @@ fn last_location_since(path: &Path, offset: &mut u64) -> Option<&'static str> {
         *offset = 0; // arquivo rotacionou/encolheu
     }
     file.seek(SeekFrom::Start(*offset)).ok()?;
-    let mut buf = String::new();
-    file.read_to_string(&mut buf).ok()?;
-    *offset = len;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf).ok()?;
 
+    // só consome até a última linha COMPLETA; a sobra (linha sendo escrita pelo
+    // jogo agora) fica para o próximo read, evitando casar com linha cortada.
+    let consumed = match buf.iter().rposition(|&b| b == b'\n') {
+        Some(i) => i + 1,
+        None => return None, // nenhuma linha completa ainda; não avança o offset
+    };
+    *offset += consumed as u64;
+
+    let text = String::from_utf8_lossy(&buf[..consumed]);
     let mut found = None;
-    for line in buf.lines() {
+    for line in text.lines() {
         if let Some(loc) = parse_location(line) {
             if let Some(key) = map_key(loc) {
                 found = Some(key);
@@ -139,17 +152,16 @@ pub fn start_watcher(app: AppHandle) {
             return;
         };
 
-        // offset por arquivo já lido; e o último mapa emitido (para deduplicar).
+        // offset por arquivo já lido. Não deduplicamos por último mapa aqui: cada
+        // linha `NetworkGameCreate` nova é uma raid nova e deve re-emitir (o front
+        // ignora quando o mapa não muda). Assim, re-entrar no mesmo mapa depois de
+        // uma troca manual volta a sincronizar.
         let mut offsets: HashMap<PathBuf, u64> = HashMap::new();
-        let mut last_emitted: Option<&'static str> = None;
 
-        let mut emit_for = |path: &Path, offsets: &mut HashMap<PathBuf, u64>| {
+        let emit_for = |path: &Path, offsets: &mut HashMap<PathBuf, u64>| {
             let off = offsets.entry(path.to_path_buf()).or_insert(0);
             if let Some(key) = last_location_since(path, off) {
-                if last_emitted != Some(key) {
-                    last_emitted = Some(key);
-                    let _ = app.emit("map-detected", key);
-                }
+                let _ = app.emit("map-detected", key);
             }
         };
 
@@ -170,15 +182,26 @@ pub fn start_watcher(app: AppHandle) {
             return;
         }
 
-        for res in rx {
-            let Ok(event) = res else { continue };
-            if !matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
-                continue;
-            }
-            for path in event.paths {
-                if is_app_log(&path) {
-                    emit_for(&path, &mut offsets);
+        loop {
+            match rx.recv_timeout(Duration::from_secs(2)) {
+                Ok(Ok(event)) => {
+                    if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_)) {
+                        for path in event.paths {
+                            if is_app_log(&path) {
+                                emit_for(&path, &mut offsets);
+                            }
+                        }
+                    }
                 }
+                Ok(Err(_)) => {}
+                // a cada 2s sem evento, re-escaneia o log mais recente: rede de
+                // segurança caso o notify perca/atrase eventos (comum no Windows).
+                Err(RecvTimeoutError::Timeout) => {
+                    if let Some(newest) = newest_app_log(&logs) {
+                        emit_for(&newest, &mut offsets);
+                    }
+                }
+                Err(RecvTimeoutError::Disconnected) => break,
             }
         }
     });
@@ -207,5 +230,28 @@ mod tests {
         assert_eq!(map_key("RezervBase"), Some("reserve"));
         assert_eq!(map_key("factory4_night"), Some("factory"));
         assert_eq!(map_key("hideout"), None);
+    }
+
+    // Garante que uma linha ainda em escrita (sem \n) não é consumida pela metade:
+    // o offset não avança e a linha é relida inteira quando completar.
+    #[test]
+    fn partial_line_is_not_consumed_until_complete() {
+        use std::io::Write;
+        let mut path = std::env::temp_dir();
+        path.push("tqc_maptracker_partial_test.log");
+        let _ = std::fs::remove_file(&path);
+
+        // metade da linha, sem newline
+        std::fs::write(&path, "00:00|app|TRACE-NetworkGameCreate ... Location: bigm").unwrap();
+        let mut off = 0u64;
+        assert_eq!(super::last_location_since(&path, &mut off), None);
+        assert_eq!(off, 0, "linha parcial não pode avançar o offset");
+
+        // completa a linha (agora com \n)
+        let mut f = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        write!(f, "ap, Sid: X'\n").unwrap();
+        assert_eq!(super::last_location_since(&path, &mut off), Some("customs"));
+
+        let _ = std::fs::remove_file(&path);
     }
 }

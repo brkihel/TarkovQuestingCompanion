@@ -1,6 +1,6 @@
 [package]
 name = "tarkov-questing-companion"
-version = "1.0.0"
+version = "1.0.1"
 description = "Tarkov Questing Companion - mapa interativo e overlay para Escape from Tarkov"
 authors = ["diego"]
 edition = "2021"
