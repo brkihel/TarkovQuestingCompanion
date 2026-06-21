@@ -1,0 +1,52 @@
+name: Release
+
+# Dispara quando voce empurra uma tag de versao, ex.: git tag v1.1.0 && git push --tags
+on:
+  push:
+    tags:
+      - "v*"
+
+# tauri-action precisa poder criar a release e anexar os instaladores
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache do Rust (acelera builds seguintes)
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Instala dependencias do front
+        run: npm ci
+
+      - name: Build + cria a release com os instaladores
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Tarkov Questing Companion ${{ github.ref_name }}"
+          releaseBody: |
+            ## Instalação
+
+            Baixe um dos instaladores abaixo (`.exe` ou `.msi`) e execute.
+
+            > O app não é assinado digitalmente — o Windows pode mostrar um aviso do
+            > SmartScreen. Clique em **Mais informações → Executar assim mesmo**.
+          releaseDraft: true
+          prerelease: false
