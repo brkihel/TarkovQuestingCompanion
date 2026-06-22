@@ -794,8 +794,41 @@ input[type="checkbox"] {
   line-height: 1;
 }
 
+/* extração em outro andar: ofuscada (mas ainda visível) */
+.extract-icon.is-faded {
+  opacity: 0.42;
+}
+
+.extract-person-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
 .extract-person {
   filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+/* badge do tipo especial (pago/flare/switch), no canto superior direito */
+.extract-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  font-size: 11px;
+  line-height: 1;
+  filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000);
+  pointer-events: none;
+}
+
+/* seta indicando andar acima (▲) / abaixo (▼) do atual */
+.extract-arrow {
+  position: absolute;
+  bottom: -5px;
+  right: -7px;
+  font-size: 9px;
+  color: #fff;
+  text-shadow: 0 0 2px #000, 0 0 2px #000;
+  pointer-events: none;
 }
 
 .extract-label {

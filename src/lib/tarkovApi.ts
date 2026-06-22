@@ -53,7 +53,18 @@ export interface Task {
 export type Faction = "pmc" | "scav" | "shared";
 export type SpawnKind = "boss" | "sniper" | "pmc" | "scav";
 
-export interface ExtractMarker { x: number; y?: number; z: number; name: string; faction: Faction }
+/** Item/valor exigido para usar uma saída paga ("taxi"). */
+export interface ExtractPayment { item: string; count: number }
+
+export interface ExtractMarker {
+  x: number; y?: number; z: number; name: string; faction: Faction;
+  /** saída paga (taxi): item/valor exigido para extrair */
+  payment?: ExtractPayment;
+  /** exige acionar uma chave/interruptor antes de abrir */
+  needsSwitch?: boolean;
+  /** saída ativada por sinalizador (PMC dispara o flare) */
+  flare?: boolean;
+}
 export interface TransitMarker { x: number; y?: number; z: number; description: string }
 export interface SpawnMarker { x: number; y?: number; z: number; kind: SpawnKind }
 export interface LootMarker { x: number; y?: number; z: number; type: string }

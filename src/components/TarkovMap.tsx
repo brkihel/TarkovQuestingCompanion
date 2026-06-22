@@ -4,7 +4,7 @@ import "leaflet/dist/leaflet.css";
 import type { TarkovMapConfig } from "../maps/mapsConfig";
 import { getCRS, getBounds, getScaledBounds, gamePos } from "../maps/leafletCrs";
 import type { MapLayerData } from "../maps/layerDefs";
-import { QUEST_LAYER_ID } from "../maps/layerDefs";
+import { QUEST_LAYER_ID, TRANSIT_LAYER_ID } from "../maps/layerDefs";
 import {
   displayAngle,
   playerIcon,
@@ -17,7 +17,7 @@ import { openMarkerEditor, type EditorLabels } from "../maps/markerEditor";
 import { escapeHtml } from "../maps/layerDefs";
 import type { CustomMarker, CustomMarkerDraft } from "../lib/customMarkers";
 import type { QuestImages } from "../lib/tarkovApi";
-import { floorsForMap, defaultFloor, floorForY, showOnFloor } from "../maps/floors";
+import { floorsForMap, defaultFloor, floorForY, showOnFloor, floorArrow } from "../maps/floors";
 import { FloorSwitcher } from "./FloorSwitcher";
 import { OBJECTIVE_RADIUS, type IconSize } from "../settings";
 import { ObjectiveTooltip, Lightbox, type CarouselPoint, type ObjectiveInfo } from "./QuestImageViewer";
@@ -308,18 +308,28 @@ export function TarkovMap({
     for (const layer of layers) {
       const group = L.layerGroup();
       const quest = isQuestLayer(layer.id);
+      // camadas que aparecem SEMPRE (ofuscadas fora do andar): quests, extracts e
+      // transits. As demais (loot/spawns, muito densas) somem nos outros níveis.
+      const alwaysVisible =
+        quest || layer.markerKind === "extract" || layer.id === TRANSIT_LAYER_ID;
       for (const m of layer.markers) {
         // filtro por andar (mapas multi-nível): some marcadores das camadas densas
-        // (loot/spawns/extracts/transits) de outros níveis. Quests ficam sempre
-        // visíveis (são poucas e o "focar" pela lista depende delas existirem).
-        if (!quest && floors && !showOnFloor(floors, activeFloorId, m.y)) continue;
-        // quests de outros andares: não somem, ficam em alpha (transparente).
-        const questFaded =
-          quest && !!floors && m.y != null && floorForY(floors, m.y).id !== activeFloorId;
+        // de outros níveis. Os de `alwaysVisible` nunca somem.
+        if (!alwaysVisible && floors && !showOnFloor(floors, activeFloorId, m.y)) continue;
+        // marcador em outro andar: não some, fica ofuscado (alpha) + seta ▲/▼.
+        const otherFloor =
+          !!floors && m.y != null && floorForY(floors, m.y).id !== activeFloorId;
+        const arrow = otherFloor && floors ? floorArrow(floors, activeFloorId, m.y) : null;
         const latlng = gamePos(m.x, m.z) as L.LatLngExpression;
         let marker: L.CircleMarker | L.Marker;
         if (layer.markerKind === "extract") {
-          marker = L.marker(latlng, { icon: extractIcon(layer.style.color, m.label ?? "") });
+          marker = L.marker(latlng, {
+            icon: extractIcon(layer.style.color, m.label ?? "", {
+              badge: m.extractBadge,
+              faded: otherFloor,
+              arrow: arrow ?? undefined,
+            }),
+          });
         } else if (layer.markerKind === "loot") {
           marker = L.marker(latlng, { icon: lootIcon(layer.style.color, m.iconKey ?? "") });
         } else {
@@ -328,8 +338,8 @@ export function TarkovMap({
             color: layer.style.color,
             weight: 2,
             fillColor: layer.style.fill,
-            fillOpacity: questFaded ? 0.18 : 0.85,
-            opacity: questFaded ? 0.3 : 1,
+            fillOpacity: otherFloor ? 0.18 : 0.85,
+            opacity: otherFloor ? 0.3 : 1,
             // objetivos num pane de z maior, para ficarem acima dos outros
             ...(quest && questRendererRef.current ? { renderer: questRendererRef.current } : {}),
           });

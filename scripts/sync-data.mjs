@@ -113,7 +113,11 @@ async function run() {
   const mapData = await gql(`{
     maps(lang: en) {
       normalizedName
-      extracts { name faction position { x y z } }
+      extracts {
+        name faction position { x y z }
+        switches { id }
+        transferItem { count item { name } }
+      }
       transits { description position { x y z } }
       spawns { sides categories position { x y z } }
       lootContainers { lootContainer { normalizedName } position { x y z } }
@@ -128,7 +132,16 @@ async function run() {
     markers[cfg.key] = {
       extracts: (m.extracts ?? [])
         .filter((e) => e.position)
-        .map((e) => ({ x: e.position.x, y: e.position.y, z: e.position.z, name: e.name, faction: e.faction })),
+        .map((e) => {
+          const out = { x: e.position.x, y: e.position.y, z: e.position.z, name: e.name, faction: e.faction };
+          // saída paga (taxi): item/valor exigido para extrair
+          if (e.transferItem?.item) out.payment = { item: e.transferItem.item.name, count: e.transferItem.count };
+          // exige acionar uma chave/interruptor
+          if (e.switches?.length) out.needsSwitch = true;
+          // ativada por sinalizador (vem marcado no nome pela tarkov.dev)
+          if (/\(flare\)/i.test(e.name)) out.flare = true;
+          return out;
+        }),
       transits: (m.transits ?? [])
         .filter((t) => t.position)
         .map((t) => ({ x: t.position.x, y: t.position.y, z: t.position.z, description: t.description })),

@@ -7,13 +7,38 @@ import { escapeHtml } from "./layerDefs";
 const PERSON_PATH =
   "M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm0 2c-4 0-8 2-8 5v3h16v-3c0-3-4-5-8-5z";
 
+export type ExtractBadge = "pay" | "flare" | "switch";
+
+export interface ExtractIconOpts {
+  /** tipo especial: saída paga (taxi), flare ou switch */
+  badge?: ExtractBadge;
+  /** ofuscar (extração em outro andar) */
+  faded?: boolean;
+  /** seta indicando que a extração está acima/abaixo do andar atual */
+  arrow?: "up" | "down";
+}
+
+// Glifo (emoji) por tipo de saída especial.
+const EXTRACT_BADGE_GLYPH: Record<ExtractBadge, string> = {
+  pay: "💲",
+  flare: "🔥",
+  switch: "🔌",
+};
+
 /** Ícone de extract: bonequinho colorido pela facção + nome embaixo. */
-export function extractIcon(color: string, label: string): L.DivIcon {
+export function extractIcon(color: string, label: string, opts: ExtractIconOpts = {}): L.DivIcon {
   const svg =
     `<svg viewBox="0 0 24 24" width="22" height="22" class="extract-person">` +
     `<path d="${PERSON_PATH}" fill="${color}" stroke="#0d0c0a" stroke-width="1.3"/></svg>`;
+  const badge = opts.badge
+    ? `<span class="extract-badge">${EXTRACT_BADGE_GLYPH[opts.badge]}</span>`
+    : "";
+  const arrow = opts.arrow
+    ? `<span class="extract-arrow">${opts.arrow === "up" ? "▲" : "▼"}</span>`
+    : "";
+  const cls = "extract-icon" + (opts.faded ? " is-faded" : "");
   const html =
-    `<div class="extract-icon">${svg}` +
+    `<div class="${cls}"><div class="extract-person-wrap">${svg}${badge}${arrow}</div>` +
     `<span class="extract-label" style="color:${color}">${escapeHtml(label)}</span></div>`;
   return L.divIcon({
     className: "marker-divicon",

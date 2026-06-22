@@ -101,3 +101,21 @@ export function showOnFloor(
   if (y == null) return true;
   return floorForY(floors, y).id === activeFloorId;
 }
+
+/**
+ * Em que direção está o andar do marcador em relação ao ativo?
+ * "up" = acima, "down" = abaixo, null = mesmo andar (ou sem dado de altura).
+ * O array de andares é ordenado de cima p/ baixo, então índice menor = mais alto.
+ */
+export function floorArrow(
+  floors: FloorDef[],
+  activeFloorId: string,
+  y: number | undefined,
+): "up" | "down" | null {
+  if (y == null) return null;
+  const markerFloor = floorForY(floors, y).id;
+  const mi = floors.findIndex((f) => f.id === markerFloor);
+  const ai = floors.findIndex((f) => f.id === activeFloorId);
+  if (mi < 0 || ai < 0 || mi === ai) return null;
+  return mi < ai ? "up" : "down";
+}

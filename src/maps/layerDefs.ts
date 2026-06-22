@@ -23,6 +23,8 @@ export interface RenderMarker {
   popupHtml?: string;
   /** texto exibido no mapa (ex.: nome do extract) */
   label?: string;
+  /** tipo especial da saída, para o badge do ícone: pago (taxi), flare ou switch */
+  extractBadge?: "pay" | "flare" | "switch";
   /** id do grupo de loot, para escolher o glifo do ícone */
   iconKey?: string;
   /** zoneId da quest, para o "focar" pela lista */
@@ -158,13 +160,23 @@ export function buildLayers(
       markerKind: "extract",
       markers: (mm?.extracts ?? [])
         .filter((e) => e.faction === ef.faction)
-        .map((e) => ({
-          x: e.x,
-          y: e.y,
-          z: e.z,
-          label: e.name,
-          popupHtml: `<strong>${escapeHtml(e.name)}</strong><br/>${ef.label}`,
-        })),
+        .map((e) => {
+          const badge = e.payment ? "pay" : e.flare ? "flare" : e.needsSwitch ? "switch" : undefined;
+          const notes: string[] = [];
+          if (e.payment)
+            notes.push(`💲 Saída paga: ${e.payment.count}× ${escapeHtml(e.payment.item)}`);
+          if (e.flare) notes.push("🔥 Ativada por sinalizador (flare)");
+          if (e.needsSwitch) notes.push("🔌 Requer acionar uma chave");
+          const extra = notes.length ? `<br/>${notes.join("<br/>")}` : "";
+          return {
+            x: e.x,
+            y: e.y,
+            z: e.z,
+            label: e.name,
+            extractBadge: badge,
+            popupHtml: `<strong>${escapeHtml(e.name)}</strong><br/>${ef.label}${extra}`,
+          };
+        }),
     });
   }
 
