@@ -11,6 +11,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { GAME_MODES, type GameMode } from "./lib/tarkovApi";
 import { translate, type Lang } from "./i18n";
 
 export type Theme = "tarkov" | "unheard";
@@ -23,6 +24,13 @@ export const THEMES: { id: Theme; nameKey: string; descKey: string; swatch: stri
   { id: "tarkov", nameKey: "theme.tarkov", descKey: "theme.tarkov.desc", swatch: "#c9b471" },
   { id: "unheard", nameKey: "theme.unheard", descKey: "theme.unheard.desc", swatch: "#b98cf0" },
 ];
+
+const MODE_KEY = "tqc:gameMode:v1";
+
+function loadGameMode(): GameMode {
+  const value = localStorage.getItem(MODE_KEY);
+  return GAME_MODES.find((mode) => mode === value) ?? "regular";
+}
 
 const LANG_KEY = "tqc:lang:v1";
 const THEME_KEY = "tqc:theme:v1";
@@ -52,6 +60,8 @@ function applyLang(lang: Lang) {
 }
 
 interface SettingsCtx {
+  gameMode: GameMode;
+  setGameMode: (mode: GameMode) => void;
   lang: Lang;
   setLang: (l: Lang) => void;
   theme: Theme;
@@ -64,6 +74,7 @@ interface SettingsCtx {
 const Ctx = createContext<SettingsCtx | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
+  const [gameMode, setGameModeState] = useState<GameMode>(loadGameMode);
   const [lang, setLangState] = useState<Lang>(loadLang);
   const [theme, setThemeState] = useState<Theme>(loadTheme);
   const [iconSize, setIconSizeState] = useState<IconSize>(loadIconSize);
@@ -71,6 +82,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // aplica no boot e sempre que mudar
   useEffect(() => applyLang(lang), [lang]);
   useEffect(() => applyTheme(theme), [theme]);
+
+  const setGameMode = useCallback((mode: GameMode) => {
+    localStorage.setItem(MODE_KEY, mode);
+    setGameModeState(mode);
+  }, []);
 
   const setLang = useCallback((l: Lang) => {
     localStorage.setItem(LANG_KEY, l);
@@ -91,7 +107,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // a janela principal recebe o evento `storage` e atualiza, e vice-versa.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === LANG_KEY) setLangState(loadLang());
+      if (e.key === MODE_KEY) setGameModeState(loadGameMode());
+      else if (e.key === LANG_KEY) setLangState(loadLang());
       else if (e.key === THEME_KEY) setThemeState(loadTheme());
       else if (e.key === ICON_KEY) setIconSizeState(loadIconSize());
     };
@@ -102,8 +119,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const t = useCallback((key: string) => translate(lang, key), [lang]);
 
   const value = useMemo<SettingsCtx>(
-    () => ({ lang, setLang, theme, setTheme, iconSize, setIconSize, t }),
-    [lang, setLang, theme, setTheme, iconSize, setIconSize, t],
+    () => ({ gameMode, setGameMode, lang, setLang, theme, setTheme, iconSize, setIconSize, t }),
+    [gameMode, setGameMode, lang, setLang, theme, setTheme, iconSize, setIconSize, t],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -22,6 +22,8 @@ struct PositionPayload {
     z: f64,
     /// quaternion de rotação [qx, qy, qz, qw], se presente no nome do print
     q: Option<[f64; 4]>,
+    #[serde(rename = "observedAt")]
+    observed_at: u64,
 }
 
 /// Estado do watcher de screenshots, mantido vivo no app. Trocar o `watcher`
@@ -142,7 +144,8 @@ fn build_watcher(app: &AppHandle, dir: &Path) -> Option<RecommendedWatcher> {
                 }
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                     if let Some(((x, y, z), q)) = parse_pose(stem) {
-                        let _ = handle.emit("player-position", PositionPayload { x, y, z, q });
+                        let _ = handle.emit("player-position", PositionPayload { x, y, z, q, observed_at: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64 });
                     }
                 }
             }

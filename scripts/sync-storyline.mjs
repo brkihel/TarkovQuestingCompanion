@@ -10,18 +10,15 @@
 //
 // Obs.: tarkov.help só tem locale en/ru (sem pt) — os nomes ficam em inglês.
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { ROOT, atomicWrite as writeFile, json, request } from "./lib/http.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const API = "https://api.tarkov.help/api";
 const LOCALE = "en";
 
 async function getJson(path) {
-  const res = await fetch(`${API}${path}`, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} em ${path}`);
-  const j = await res.json();
+  const j = await json(`${API}${path}`);
   return j && j.data !== undefined ? j.data : j;
 }
 

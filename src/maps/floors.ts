@@ -1,3 +1,5 @@
+import catalog from "./catalog.json";
+
 // Andares (níveis) dos mapas.
 //
 // Cada andar = um grupo <g> de topo do SVG do mapa (padrão tarkov.dev:
@@ -17,6 +19,7 @@ export interface FloorDef {
   max: number;
   /** andar padrão ao abrir o mapa (o térreo, onde fica a maioria dos marcadores) */
   default?: boolean;
+  tilePath?: string;
 }
 
 const INF = Infinity;
@@ -66,9 +69,8 @@ export const MAP_FLOORS: Record<string, FloorDef[]> = {
     { id: "Underground_Level", name: "Underground", svgGroup: "Underground_Level", min: -INF, max: -6 },
   ],
   "ground-zero": [
-    { id: "Third_Floor", name: "3rd Floor", svgGroup: "Third_Floor", min: 40, max: INF },
-    { id: "Second_Floor", name: "2nd Floor", svgGroup: "Second_Floor", min: 32.3, max: 40 },
-    { id: "First_Floor", name: "1st Floor", svgGroup: "First_Floor", min: 28, max: 32.3 },
+    { id: "Third_Floor", name: "3rd Floor", svgGroup: "Third_Floor", min: 32.3, max: INF },
+    { id: "Second_Floor", name: "2nd Floor", svgGroup: "Second_Floor", min: 28, max: 32.3 },
     { id: "Ground_Level", name: "Ground", svgGroup: "Ground_Level", min: 21, max: 28, default: true },
     { id: "Underground_Level", name: "Underground", svgGroup: "Underground_Level", min: -INF, max: 21 },
   ],
@@ -76,7 +78,8 @@ export const MAP_FLOORS: Record<string, FloorDef[]> = {
 
 /** Andares de um mapa (ou undefined se ele tem um nível só). */
 export function floorsForMap(mapKey: string): FloorDef[] | undefined {
-  return MAP_FLOORS[mapKey];
+  const synced = catalog.find((m) => m.key === mapKey)?.floors;
+  return synced?.map((f) => ({ ...f, min: f.min ?? -Infinity, max: f.max ?? Infinity })) ?? MAP_FLOORS[mapKey];
 }
 
 /** Andar que contém a altura `y` (as bandas cobrem toda a reta). */

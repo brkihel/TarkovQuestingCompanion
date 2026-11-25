@@ -1,3 +1,8 @@
+import type { Lang } from "../i18n";
+
+export const GAME_MODES = ["regular", "pve", "pvp-season"] as const;
+export type GameMode = (typeof GAME_MODES)[number];
+
 // Camada de dados — lê os JSONs empacotados localmente (public/data/*),
 // gerados por `npm run sync`. Em runtime o app NÃO chama a tarkov.dev:
 // tudo é servido do próprio bundle (offline / sem terceiros).
@@ -25,6 +30,9 @@ export interface Objective {
   type: string;
   description: string;
   optional: boolean;
+  count?: number | null;
+  foundInRaid?: boolean;
+  items?: { id: string; name: string }[];
   maps: { normalizedName: string }[];
   zones: ObjectiveZone[];
   // Objetivos de item de quest (findQuestItem/giveQuestItem) não usam `zones`:
@@ -45,6 +53,8 @@ export interface Task {
   kappaRequired: boolean;
   wikiLink: string | null;
   trader: { name: string } | null;
+  map?: { normalizedName: string } | null;
+  neededKeys?: { map: { normalizedName: string }; keys: { id: string; name: string }[] }[];
   taskRequirements: TaskRequirement[];
   objectives: Objective[];
 }
@@ -54,7 +64,7 @@ export type Faction = "pmc" | "scav" | "shared";
 export type SpawnKind = "boss" | "sniper" | "pmc" | "scav";
 
 /** Item/valor exigido para usar uma saída paga ("taxi"). */
-export interface ExtractPayment { item: string; count: number }
+export interface ExtractPayment { item: string; count: number; currency?: boolean }
 
 export interface ExtractMarker {
   x: number; y?: number; z: number; name: string; faction: Faction;
@@ -64,6 +74,8 @@ export interface ExtractMarker {
   needsSwitch?: boolean;
   /** saída ativada por sinalizador (PMC dispara o flare) */
   flare?: boolean;
+  requirements?: string[];
+  cooperation?: boolean;
 }
 export interface TransitMarker { x: number; y?: number; z: number; description: string }
 export interface SpawnMarker { x: number; y?: number; z: number; kind: SpawnKind }
@@ -84,12 +96,12 @@ async function loadJson<T>(path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function fetchTasks(): Promise<Task[]> {
-  return loadJson<Task[]>("/data/tasks.json");
+export function fetchTasks(mode: GameMode = "regular", lang: Lang = "en"): Promise<Task[]> {
+  return loadJson<Task[]>(`/data/${mode}/tasks${lang === "pt" ? "-pt" : ""}.json`);
 }
 
-export function fetchMapMarkers(): Promise<AllMapMarkers> {
-  return loadJson<AllMapMarkers>("/data/map-markers.json");
+export function fetchMapMarkers(mode: GameMode = "regular", lang: Lang = "en"): Promise<AllMapMarkers> {
+  return loadJson<AllMapMarkers>(`/data/${mode}/map-markers${lang === "pt" ? "-pt" : ""}.json`);
 }
 
 // --- main storyline (trader Storyteller) ---
@@ -190,6 +202,8 @@ export interface QuestMarker {
   objectiveIndex: number;
   /** total de objetivos geolocalizados da quest neste mapa */
   objectiveCount: number;
+  /** Multiple possible spawns of the same quest item are alternatives. */
+  alternative?: boolean;
 }
 
 /**
@@ -238,6 +252,7 @@ export function markersForMap(tasks: Task[], mapKeys: string[]): QuestMarker[] {
       // marcador. Não têm `zone`, então sintetizamos um id estável.
       for (const loc of obj.possibleLocations ?? []) {
         if (!loc.map || !accepted.has(loc.map.normalizedName)) continue;
+        if (!loc.positions.length) continue;
         noteObj(obj.id);
         loc.positions.forEach((pos, i) => {
           taskMarkers.push({
@@ -245,6 +260,7 @@ export function markersForMap(tasks: Task[], mapKeys: string[]): QuestMarker[] {
             taskName: task.name,
             objectiveId: obj.id,
             zoneId: `${obj.id}-loc-${i}`,
+            alternative: true,
             type: obj.type,
             description: obj.description,
             optional: obj.optional,
@@ -260,9 +276,14 @@ export function markersForMap(tasks: Task[], mapKeys: string[]): QuestMarker[] {
     }
 
     // numera os objetivos da quest (1-based) na ordem em que aparecem no mapa.
+    const unique = new Set<string>();
     const indexOf = new Map(objOrder.map((id, i) => [id, i + 1]));
     const count = objOrder.length;
     for (const m of taskMarkers) {
+      const identity = `${m.objectiveId}:${m.type}:${m.x}:${m.y}:${m.z}`;
+      if (unique.has(identity)) continue;
+      unique.add(identity);
+      m.zoneId = `${m.objectiveId}:${m.zoneId}:${m.x}:${m.y}:${m.z}`;
       m.objectiveIndex = indexOf.get(m.objectiveId) ?? 1;
       m.objectiveCount = count;
       markers.push(m);

@@ -1,5 +1,285 @@
 {
-  "syncedAt": "2026-06-20T22:45:07.339Z",
-  "source": "tarkov.dev (the-hideout, open-source)",
-  "attribution": "Dados e mapas SVG por tarkov.dev e autores da comunidade (Shebuka et al.)"
+  "syncedAt": "2026-11-25T14:16:08.523Z",
+  "source": "tarkov.dev JSON API",
+  "attribution": "Quest data and map artwork by tarkov.dev and credited community authors.",
+  "modes": {
+    "regular": {
+      "tasks": 503,
+      "maps": 13
+    },
+    "pve": {
+      "tasks": 499,
+      "maps": 13
+    },
+    "pvp-season": {
+      "tasks": 462,
+      "maps": 13
+    }
+  },
+  "sources": [
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Customs.svg",
+      "etag": "W/\"91668ae18a8d46d53e6fa8850184254a\"",
+      "lastModified": "Mon, 03 Nov 2025 17:22:49 GMT",
+      "sha256": "ee53a5c0faf185a1a4d7be82c2533cd76e70372ac2cac5e9d75b6f3be226768e"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Factory.svg",
+      "etag": "W/\"4aa9c6575f3c98553be46faa76e7738a\"",
+      "lastModified": "Mon, 03 Nov 2025 17:22:49 GMT",
+      "sha256": "237344e31bee3f2d830299194bacfa2768eacd9cba16dfca2243a07b44426c6b"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/GroundZero.svg",
+      "etag": "W/\"76c7a7a56a19a5cc9b8caccd2eb541ad\"",
+      "lastModified": "Mon, 03 Nov 2025 17:22:49 GMT",
+      "sha256": "ab04c896ddb798b54c2dda5409fcc40707484f55ca4e8aacd16dfd46c1a9d6eb"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Interchange.svg",
+      "etag": "W/\"ad74227794b840f59118c42183132917\"",
+      "lastModified": "Mon, 12 Jan 2026 20:25:06 GMT",
+      "sha256": "31a44112cd5fe33484ce6be7b7dc80d13db6077cba2583a4425ed94c665f47c4"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Lighthouse.svg",
+      "etag": "W/\"1c08cea761e337052cbb4f30e4d7af82\"",
+      "lastModified": "Mon, 03 Nov 2025 17:22:50 GMT",
+      "sha256": "67fcba39a45e896943e5b0befd0d8d2cf54a88334e8c24136f8e0c0abe31713e"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Reserve.svg",
+      "etag": "W/\"87c8c35d839335576a7abaa9211cbf0a\"",
+      "lastModified": "Mon, 03 Nov 2025 17:22:50 GMT",
+      "sha256": "09d1b1546bc6c0f58e6544092b1999127ea61aaaa802a87ea82c5ba6ec49483b"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Shoreline.svg",
+      "etag": "W/\"1b333af544320d90bd41997a02816f0a\"",
+      "lastModified": "Mon, 03 Nov 2025 17:22:50 GMT",
+      "sha256": "a7c69a6987227b2dbefb0c408d63c54dc09c7074600f31b0adfd5fd9de43a2c7"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/StreetsOfTarkov.svg",
+      "etag": "W/\"4f4f926513df48522f225fe576dfb478\"",
+      "lastModified": "Mon, 03 Nov 2025 17:22:50 GMT",
+      "sha256": "d15f0e5efa5e50a35a003084cb8a416d51f612d1dd47882c45580ff2c0a87e69"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Terminal.svg",
+      "etag": "W/\"e7050714ea8639673c734fc9198107a8\"",
+      "lastModified": "Mon, 16 Feb 2026 14:24:00 GMT",
+      "sha256": "f0d0cc7b615e933e5846c4b4f35e7577ae151396a729b1f02e6c1267212acd71"
+    },
+    {
+      "url": "https://assets.tarkov.dev/maps/svg/Woods.svg",
+      "etag": "W/\"a9a4d9a1a79c9bf15b90d95eba947a56\"",
+      "lastModified": "Mon, 12 Jan 2026 20:25:20 GMT",
+      "sha256": "b356ded5e763e81edc1710d58c2fc7943f6ad6f48cd261c83dd0a192f45f0b9a"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/items_en",
+      "etag": "W/\"24b385a6657332e8df8b0b848dd96f94\"",
+      "lastModified": "Tue, 24 Nov 2026 18:26:00 GMT",
+      "sha256": "55d6f74d6b73a20993098a385d7f248acb9ff0b029dc874063f7d23f28d67f38"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/items_pt",
+      "etag": "W/\"6df0f46f2fc8e952b7fa1344806763f7\"",
+      "lastModified": "Tue, 24 Nov 2026 18:26:01 GMT",
+      "sha256": "b809bf1a75dfe67f035de900e213d4286f4cf72d819bd4dc50cb6d8078b7761d"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/maps",
+      "etag": "W/\"ad0eb837f9884c1516b794b18e3c600a\"",
+      "lastModified": "Wed, 25 Nov 2026 14:14:26 GMT",
+      "sha256": "e43226aaf9a3e09441fd99d8f42b0a63b59db97cc5d3fc6521facd3d576eb961"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/maps_en",
+      "etag": "W/\"7b8febf3c07438f4846b23a25cc99c52\"",
+      "lastModified": "Tue, 24 Nov 2026 18:24:27 GMT",
+      "sha256": "7b4d764da13d6bb26cabbbc569f504cccc917d3a5d1cc94d805e422fe0ab60ea"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/maps_pt",
+      "etag": "W/\"ab5dc3199306dfd60b7e75be0c2f8a20\"",
+      "lastModified": "Tue, 24 Nov 2026 18:24:27 GMT",
+      "sha256": "66ce50e22c5f163817cf0b7e46adcc4c96c3b987bea63c00f17e94cb1ae374f5"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/tasks",
+      "etag": "W/\"b5d5703520d4384c7f893d0de5571aa3\"",
+      "lastModified": "Wed, 25 Nov 2026 13:43:26 GMT",
+      "sha256": "093e46e0b1f2461b51b5a40aad59079b5991b6929af6e27ce605977acbce0f6e"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/tasks_en",
+      "etag": "W/\"8df9dfeebab56316ce22a235b5c569db\"",
+      "lastModified": "Mon, 16 Nov 2026 19:03:33 GMT",
+      "sha256": "b96bbd16bd249d78dca2511151b74bd7aa89321bdad055b5d479f96d37854472"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/tasks_pt",
+      "etag": "W/\"eefc6951fdce3f57fc517411789d5c22\"",
+      "lastModified": "Mon, 16 Nov 2026 19:03:33 GMT",
+      "sha256": "6f827e54d0f93589f75d8caf8357778df2c31c5d2e332483911df8bb2cc85d02"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/traders",
+      "etag": "W/\"3e6dfaa2d8365b1590d02f07210f8ada\"",
+      "lastModified": "Wed, 25 Nov 2026 14:01:51 GMT",
+      "sha256": "3595b466e619c0b0a4ffb606c4e2e7f21593cdef425478ec301b3634bfd7082e"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/traders_en",
+      "etag": "W/\"8072d07ffefe2b727bb5a424407dab72\"",
+      "lastModified": "Tue, 24 Nov 2026 18:22:05 GMT",
+      "sha256": "6461945f3f615d180b818288054f3610636cd16f7d03e4e372afd8e883db7efd"
+    },
+    {
+      "url": "https://json.tarkov.dev/pve/traders_pt",
+      "etag": "W/\"55ddb4c45490c4f7d5f67627d9e5283a\"",
+      "lastModified": "Tue, 24 Nov 2026 18:22:05 GMT",
+      "sha256": "4709732c98b8688e7ba6d88129505f05cb8576c7cba0d7003863239cf237eb50"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/items_en",
+      "etag": "W/\"24b385a6657332e8df8b0b848dd96f94\"",
+      "lastModified": "Tue, 24 Nov 2026 18:26:48 GMT",
+      "sha256": "55d6f74d6b73a20993098a385d7f248acb9ff0b029dc874063f7d23f28d67f38"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/items_pt",
+      "etag": "W/\"6df0f46f2fc8e952b7fa1344806763f7\"",
+      "lastModified": "Tue, 24 Nov 2026 18:26:48 GMT",
+      "sha256": "b809bf1a75dfe67f035de900e213d4286f4cf72d819bd4dc50cb6d8078b7761d"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/maps",
+      "etag": "W/\"1b83b7653d1ae102ddea7f975dd7ed6b\"",
+      "lastModified": "Wed, 25 Nov 2026 14:14:31 GMT",
+      "sha256": "fe10a7c43dd044d6c69cff4cfe245a9c4e39741c630007ce40e9a1703f6fb019"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/maps_en",
+      "etag": "W/\"ba911d58eee809a754aeecf7643f4987\"",
+      "lastModified": "Tue, 24 Nov 2026 18:24:32 GMT",
+      "sha256": "0ce61d9ab36644118ef131c7927d33e588bba1489abe48f4bddc2dbb54e8d976"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/maps_pt",
+      "etag": "W/\"37fcd0e13eeae03867aa5833dc9f2a41\"",
+      "lastModified": "Tue, 24 Nov 2026 18:24:32 GMT",
+      "sha256": "bdb478e313a4682e3d6c7138ba499f6c32c28a3a6a8ff1d678fa7eb878343899"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/tasks",
+      "etag": "W/\"773f6a48058eaea0de7023fab5a748b3\"",
+      "lastModified": "Wed, 25 Nov 2026 13:43:32 GMT",
+      "sha256": "3b273511323f94bbc3ca7400a24e98dded30837fee3eb5a728bcc69973fa2084"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/tasks_en",
+      "etag": "W/\"268c51b63d436896aeb6d1680b2a3a15\"",
+      "lastModified": "Mon, 16 Nov 2026 19:03:40 GMT",
+      "sha256": "0eae81346f812e086dd8ffc9ddf1725fc35bd7924cfcc4e05a6afd4cfd30410b"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/tasks_pt",
+      "etag": "W/\"58c790af36b27b5f072f4556bd112a83\"",
+      "lastModified": "Mon, 16 Nov 2026 19:03:40 GMT",
+      "sha256": "2cc94d85a02d909f80168e9153537419364d7036ef561c67c68f3a7c611034d0"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/traders",
+      "etag": "W/\"6e8b0d59be0f80a36e4b2a011406a0f3\"",
+      "lastModified": "Wed, 25 Nov 2026 14:11:45 GMT",
+      "sha256": "8295a115718c3f818e4f0d21f6721becd06227dbd4388dcbc8052216ac206aed"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/traders_en",
+      "etag": "W/\"8072d07ffefe2b727bb5a424407dab72\"",
+      "lastModified": "Tue, 24 Nov 2026 18:22:06 GMT",
+      "sha256": "6461945f3f615d180b818288054f3610636cd16f7d03e4e372afd8e883db7efd"
+    },
+    {
+      "url": "https://json.tarkov.dev/pvp-season/traders_pt",
+      "etag": "W/\"55ddb4c45490c4f7d5f67627d9e5283a\"",
+      "lastModified": "Tue, 24 Nov 2026 18:22:06 GMT",
+      "sha256": "4709732c98b8688e7ba6d88129505f05cb8576c7cba0d7003863239cf237eb50"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/items_en",
+      "etag": "W/\"b124626611532e647a691742dda3bc6a\"",
+      "lastModified": "Tue, 24 Nov 2026 18:25:35 GMT",
+      "sha256": "88439453291143f212a463660166196ca6b11aa343050d02fa4f0e1f803a4fdd"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/items_pt",
+      "etag": "W/\"f1e62c73d5a3970654b9b9380a93cb84\"",
+      "lastModified": "Tue, 24 Nov 2026 18:25:35 GMT",
+      "sha256": "e6566de802fe2b9988ef05b7f20a31462e9363a0de193631c0345f6c9ee73178"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/maps",
+      "etag": "W/\"53085c2a78f5d535114f79591000ae89\"",
+      "lastModified": "Wed, 25 Nov 2026 14:14:21 GMT",
+      "sha256": "978226d79503885faf4a82dda53ec29b729ef2b9b3381c230e298949ad2eb45e"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/maps_en",
+      "etag": "W/\"ce5e4d520497c546ff6fbd66a085798b\"",
+      "lastModified": "Tue, 24 Nov 2026 18:24:22 GMT",
+      "sha256": "46657713b18a133fca8ef2ed4aa2088540103ada54be3881c55be84a8c45ee40"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/maps_pt",
+      "etag": "W/\"9bd5b54f8126b4875721395e9faedf1f\"",
+      "lastModified": "Tue, 24 Nov 2026 18:24:22 GMT",
+      "sha256": "767a63e65504479e1a6adf789c4561c042ff3bd7ca856266ab89af56e96a7446"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/tasks",
+      "etag": "W/\"c9d8dde09487170b379abc107fe7b2f1\"",
+      "lastModified": "Wed, 25 Nov 2026 13:43:17 GMT",
+      "sha256": "ea164c4e6d3943573f155866e8acec16f2f92afaf341c8044cd11d507b915ac2"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/tasks_en",
+      "etag": "W/\"850e5f4004dd0639aca063043c679553\"",
+      "lastModified": "Mon, 16 Nov 2026 19:03:23 GMT",
+      "sha256": "7b753b0358cf42f6ae9d72444548e11d2f133786a63fec2f8a2adecf84d8574e"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/tasks_pt",
+      "etag": "W/\"3335bdb8a22c2a987a04e5738fe42183\"",
+      "lastModified": "Mon, 16 Nov 2026 19:03:23 GMT",
+      "sha256": "a1d74174c73baac16d445217b9066bc1b7f51667d1ad85daf345946335e15c33"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/traders",
+      "etag": "W/\"2f8af30c15716cf813decdc91622dc22\"",
+      "lastModified": "Wed, 25 Nov 2026 14:01:50 GMT",
+      "sha256": "260105b849edadba313b181518a71a991599252b86e05e402473ca9c6ea4f4d9"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/traders_en",
+      "etag": "W/\"8072d07ffefe2b727bb5a424407dab72\"",
+      "lastModified": "Tue, 24 Nov 2026 18:22:04 GMT",
+      "sha256": "6461945f3f615d180b818288054f3610636cd16f7d03e4e372afd8e883db7efd"
+    },
+    {
+      "url": "https://json.tarkov.dev/regular/traders_pt",
+      "etag": "W/\"55ddb4c45490c4f7d5f67627d9e5283a\"",
+      "lastModified": "Tue, 24 Nov 2026 18:22:04 GMT",
+      "sha256": "4709732c98b8688e7ba6d88129505f05cb8576c7cba0d7003863239cf237eb50"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/the-hideout/tarkov-dev/main/src/data/maps.json",
+      "etag": "W/\"cdc3bfa4b987e955022830ce90f98b3b21750a056bc97eef4b918f52f31f3eaa\"",
+      "lastModified": null,
+      "sha256": "8a33c65083e7995012bb8fae4b20134911d6148d7e2e0fa0564fc9378c8fb1c8"
+    }
+  ]
 }

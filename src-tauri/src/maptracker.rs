@@ -20,7 +20,7 @@ use tauri::{AppHandle, Emitter};
 fn map_key(internal: &str) -> Option<&'static str> {
     Some(match internal.trim().to_ascii_lowercase().as_str() {
         "bigmap" => "customs",
-        "factory4_day" | "factory4_night" => "factory",
+        "factory4_day" | "factory4_night" | "factory_event" => "factory",
         "sandbox" | "sandbox_high" => "ground-zero",
         "interchange" => "interchange",
         "lighthouse" => "lighthouse",
@@ -28,9 +28,10 @@ fn map_key(internal: &str) -> Option<&'static str> {
         "shoreline" => "shoreline",
         "tarkovstreets" => "streets-of-tarkov",
         "woods" => "woods",
-        "laboratory" => "the-lab",
+        "laboratory" | "laboratory_dark" | "laboratory_event" => "the-lab",
         "labyrinth" => "the-labyrinth",
         "terminal" => "terminal",
+        "icebreaker" => "icebreaker",
         _ => return None,
     })
 }
@@ -229,6 +230,10 @@ mod tests {
         assert_eq!(map_key("Shoreline"), Some("shoreline"));
         assert_eq!(map_key("RezervBase"), Some("reserve"));
         assert_eq!(map_key("factory4_night"), Some("factory"));
+        assert_eq!(map_key("Icebreaker"), Some("icebreaker"));
+        assert_eq!(map_key("laboratory_dark"), Some("the-lab"));
+        assert_eq!(map_key("laboratory_event"), Some("the-lab"));
+        assert_eq!(map_key("factory_event"), Some("factory"));
         assert_eq!(map_key("hideout"), None);
     }
 

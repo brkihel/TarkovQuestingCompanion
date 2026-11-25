@@ -62,7 +62,7 @@ export const EXTRACT_FACTIONS: {
 }[] = [
   { id: "extract-pmc", label: "PMC Extract", faction: "pmc", color: "#4caf6d" },
   { id: "extract-scav", label: "SCAV Extract", faction: "scav", color: "#d98b3a" },
-  { id: "extract-coop", label: "Coop Extract", faction: "shared", color: "#5b9bd5" },
+  { id: "extract-coop", label: "Shared Extract", faction: "shared", color: "#5b9bd5" },
 ];
 
 // ---- Spawns ----
@@ -89,19 +89,19 @@ export const LOOT_GROUPS: {
   { id: "loot-ammo", label: "Ammo Box", types: ["wooden-ammo-box"], color: "#a1887f" },
   { id: "loot-grenade", label: "Grenade Box", types: ["grenade-box"], color: "#6d8b3a" },
   { id: "loot-weapon", label: "Weapon Box", types: ["weapon-box"], color: "#c98a3a" },
-  { id: "loot-cash", label: "Cash Register", types: ["cash-register"], color: "#3aa86b" },
-  { id: "loot-safe", label: "Safe", types: ["safe"], color: "#9e9e9e" },
-  { id: "loot-body", label: "Dead Body", types: ["pmc-body", "dead-scav"], color: "#b0413e" },
+  { id: "loot-cash", label: "Cash Register", types: ["cash-register", "bank-cash-register"], color: "#3aa86b" },
+  { id: "loot-safe", label: "Safe", types: ["safe", "bank-safe", "shturmans-stash"], color: "#9e9e9e" },
+  { id: "loot-body", label: "Dead Body", types: ["pmc-body", "dead-scav", "scav-body", "civilian-body", "lab-technician-body"], color: "#b0413e" },
   { id: "loot-jacket", label: "Jacket", types: ["jacket"], color: "#7e8aa0" },
   { id: "loot-drawer", label: "Drawer", types: ["drawer"], color: "#a98b5a" },
-  { id: "loot-sportsbag", label: "Sports Bag", types: ["duffle-bag"], color: "#5f8a8b" },
+  { id: "loot-sportsbag", label: "Sports Bag", types: ["duffle-bag", "plastic-suitcase"], color: "#5f8a8b" },
   { id: "loot-woodcrate", label: "Wooden Crate", types: ["wooden-crate"], color: "#b08454" },
   { id: "loot-techcrate", label: "Tech Supply Crate", types: ["technical-supply-crate"], color: "#4a7fa0" },
   { id: "loot-toolbox", label: "Toolbox", types: ["toolbox"], color: "#c0623a" },
   { id: "loot-pcblock", label: "PC Block", types: ["pc-block"], color: "#5d6bb0" },
   { id: "loot-medcrate", label: "Med Supply Crate", types: ["medical-supply-crate"], color: "#cf5b6f" },
   { id: "loot-medcase", label: "Medcase", types: ["medcase"], color: "#d77c8c" },
-  { id: "loot-medbag", label: "Medbag", types: ["medbag-smu06"], color: "#d99aa6" },
+  { id: "loot-medbag", label: "Medbag", types: ["medbag-smu06", "medbag"], color: "#d99aa6" },
   { id: "loot-ration", label: "Ration Supply Crate", types: ["ration-supply-crate"], color: "#c2a34a" },
 ];
 
@@ -128,6 +128,7 @@ export function defaultVisibleIds(): string[] {
 export function buildLayers(
   questMarkers: QuestMarker[],
   mm: MapMarkers | undefined,
+  t: (key: string) => string = (key) => key,
 ): MapLayerData[] {
   const layers: MapLayerData[] = [];
 
@@ -161,12 +162,14 @@ export function buildLayers(
       markers: (mm?.extracts ?? [])
         .filter((e) => e.faction === ef.faction)
         .map((e) => {
-          const badge = e.payment ? "pay" : e.flare ? "flare" : e.needsSwitch ? "switch" : undefined;
+          const badge = e.payment?.currency ? "pay" : e.flare ? "flare" : e.needsSwitch ? "switch" : undefined;
           const notes: string[] = [];
           if (e.payment)
-            notes.push(`💲 Saída paga: ${e.payment.count}× ${escapeHtml(e.payment.item)}`);
-          if (e.flare) notes.push("🔥 Ativada por sinalizador (flare)");
-          if (e.needsSwitch) notes.push("🔌 Requer acionar uma chave");
+            notes.push(`${t(e.payment.currency ? "extract.payment" : "extract.item")}: ${e.payment.count}× ${escapeHtml(e.payment.item)}`);
+          if (e.flare) notes.push(t("extract.flare"));
+          if (e.needsSwitch) notes.push(t("extract.switch"));
+          if (e.cooperation) notes.push(t("extract.coop"));
+          notes.push(...(e.requirements ?? []).map(escapeHtml));
           const extra = notes.length ? `<br/>${notes.join("<br/>")}` : "";
           return {
             x: e.x,
@@ -174,7 +177,7 @@ export function buildLayers(
             z: e.z,
             label: e.name,
             extractBadge: badge,
-            popupHtml: `<strong>${escapeHtml(e.name)}</strong><br/>${ef.label}${extra}`,
+            popupHtml: `<strong>${escapeHtml(e.name)}</strong><br/>${t(`extract.${e.faction}`)}${extra}<br/><small>${t("extract.check")}</small>`,
           };
         }),
     });

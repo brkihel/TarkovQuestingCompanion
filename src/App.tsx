@@ -1,3 +1,7 @@
+import { QuestPanel } from "./components/QuestPanel";
+import { useQuestProgress } from "./lib/useQuestProgress";
+import { progressId } from "./lib/planner";
+import { DataStatus } from "./components/DataStatus";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -23,6 +27,7 @@ import {
   fetchQuestGuides,
   fetchQuestImages,
   markersForMap,
+  GAME_MODES,
   type Task,
   type AllMapMarkers,
   type StorylineQuest,
@@ -48,9 +53,9 @@ function loadVisible(): Set<string> {
   return new Set(defaultVisibleIds());
 }
 
-function loadSelectedQuests(): Set<string> {
+function loadSelectedQuests(key = SELECTED_QUESTS_KEY): Set<string> {
   try {
-    const raw = localStorage.getItem(SELECTED_QUESTS_KEY);
+    const raw = localStorage.getItem(key);
     if (raw) return new Set(JSON.parse(raw) as string[]);
   } catch {
     /* ignore */
@@ -69,7 +74,9 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [focusZoneId, setFocusZoneId] = useState<string | null>(null);
   const [visible, setVisible] = useState<Set<string>>(loadVisible);
-  const [selectedQuests, setSelectedQuests] = useState<Set<string>>(loadSelectedQuests);
+  const [selections, setSelections] = useState(() => Object.fromEntries(
+    GAME_MODES.map((mode) => [mode, loadSelectedQuests(mode === "regular" ? SELECTED_QUESTS_KEY : `${SELECTED_QUESTS_KEY}:${mode}`)]),
+  ) as Record<string, Set<string>>);
   const [player, setPlayer] = useState<PlayerPose | null>(null);
   const [autoMap, setAutoMap] = useState<boolean>(loadAutoMap);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -78,13 +85,22 @@ function App() {
   const [customMarkers, setCustomMarkers] = useState<CustomMarker[]>(() =>
     loadCustomMarkers(DEFAULT_MAP_KEY),
   );
-  const { t, iconSize } = useSettings();
+  const { t, iconSize, lang, gameMode, setGameMode } = useSettings();
+
+  const { completed, toggle: toggleCompleted } = useQuestProgress(gameMode);
+  const selectedQuests = selections[gameMode];
+  const setSelectedQuests = (value: Set<string> | ((previous: Set<string>) => Set<string>)) => {
+    setSelections((previous) => ({ ...previous,
+      [gameMode]: typeof value === "function" ? value(previous[gameMode]) : value,
+    }));
+  };
 
   const config = useMemo(() => getMapByKey(mapKey), [mapKey]);
 
   // marcas customizadas: recarrega ao trocar de mapa (são persistidas por mapa).
   useEffect(() => {
     setCustomMarkers(loadCustomMarkers(mapKey));
+    setPlayer(null);
   }, [mapKey]);
 
   const addCustomMarker = (draft: CustomMarkerDraft) => {
@@ -106,7 +122,10 @@ function App() {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    Promise.all([fetchTasks(), fetchMapMarkers()])
+    setTasks([]);
+    setMapMarkers({});
+    setFocusZoneId(null);
+    Promise.all([fetchTasks(gameMode, lang), fetchMapMarkers(gameMode, lang)])
       .then(([t, mm]) => {
         if (!alive) return;
         setTasks(t);
@@ -115,6 +134,11 @@ function App() {
       })
       .catch((e) => alive && setError(String(e)))
       .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, [gameMode, lang]);
+
+  useEffect(() => {
+    let alive = true;
     // storyline é opcional: se faltar o arquivo, a seção só não aparece
     fetchStoryline()
       .then((s) => alive && setStoryline(s.quests))
@@ -127,9 +151,7 @@ function App() {
     fetchQuestImages()
       .then((im) => alive && setQuestImages(im))
       .catch(() => {});
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   // fecha a splash e mostra a janela principal quando o load inicial termina
@@ -154,12 +176,12 @@ function App() {
   useEffect(() => {
     const ids = [...selectedQuests];
     try {
-      localStorage.setItem(SELECTED_QUESTS_KEY, JSON.stringify(ids));
+      localStorage.setItem(gameMode === "regular" ? SELECTED_QUESTS_KEY : `${SELECTED_QUESTS_KEY}:${gameMode}`, JSON.stringify(ids));
     } catch {
       /* ignore */
     }
     invoke("set_selected_quests", { ids }).catch(() => {});
-  }, [selectedQuests]);
+  }, [selectedQuests, gameMode]);
 
   // sincroniza o mapa selecionado com o minimap (via estado no Rust)
   useEffect(() => {
@@ -170,7 +192,7 @@ function App() {
   useEffect(() => {
     const un = listen<PlayerPose>("player-position", (e) => setPlayer(e.payload));
     return () => {
-      un.then((f) => f());
+      un.then((f) => f()).catch(() => {});
     };
   }, []);
 
@@ -190,7 +212,7 @@ function App() {
       }
     });
     return () => {
-      un.then((f) => f());
+      un.then((f) => f()).catch(() => {});
     };
   }, []);
 
@@ -201,13 +223,13 @@ function App() {
 
   // só vão pro mapa os marcadores das quests marcadas na lista
   const visibleQuestMarkers = useMemo(
-    () => questMarkers.filter((m) => selectedQuests.has(m.taskId)),
-    [questMarkers, selectedQuests],
+    () => questMarkers.filter((m) => selectedQuests.has(m.taskId) && !completed.has(progressId(m.taskId, m.objectiveId))),
+    [questMarkers, selectedQuests, completed],
   );
 
   const layers = useMemo(
-    () => buildLayers(visibleQuestMarkers, mapMarkers[config.key]),
-    [visibleQuestMarkers, mapMarkers, config],
+    () => buildLayers(visibleQuestMarkers, mapMarkers[config.key], t),
+    [visibleQuestMarkers, mapMarkers, config, t],
   );
 
   const counts = useMemo(() => {
@@ -236,22 +258,11 @@ function App() {
       else next.delete(q.id);
       return next;
     });
-    if (turningOn) setFocusZoneId(q.zoneId);
+    if (turningOn && q.zoneId) setFocusZoneId(q.zoneId);
   };
 
   // abre o guia da quest nativamente (modal dentro do app)
   const openGuide = (seoLink: string) => setGuideSeo(seoLink);
-
-  // lista de quests únicas do mapa (para marcar/focar)
-  const questsOnMap = useMemo(() => {
-    const seen = new Map<string, { id: string; name: string; trader: string | null; zoneId: string }>();
-    for (const m of questMarkers) {
-      if (!seen.has(m.taskId)) {
-        seen.set(m.taskId, { id: m.taskId, name: m.taskName, trader: m.trader, zoneId: m.zoneId });
-      }
-    }
-    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [questMarkers]);
 
   return (
     <div className="app">
@@ -272,6 +283,13 @@ function App() {
               ⚙
             </button>
           </div>
+
+          <label className="field">
+            <span className="field-label">{t("nav.mode")}</span>
+            <select className="select" value={gameMode} onChange={(e) => setGameMode(e.target.value as typeof gameMode)}>
+              {GAME_MODES.map((mode) => <option key={mode} value={mode}>{t(`mode.${mode}`)}</option>)}
+            </select>
+          </label>
 
           <label className="field">
             <span className="field-label">{t("nav.map")}</span>
@@ -339,47 +357,10 @@ function App() {
                 <>
                   <FilterPanel visible={visible} counts={counts} onSet={setLayerVisible} />
 
-                  <div className="panel">
-                    <h3 className="panel-title">
-                      {t("quests.title")} {questsOnMap.length > 0 && <span className="count">{questsOnMap.length}</span>}
-                      {selectedQuests.size > 0 && (
-                        <button className="panel-action" onClick={() => setSelectedQuests(new Set())}>
-                          {t("quests.clear")} ({selectedQuests.size})
-                        </button>
-                      )}
-                    </h3>
-                    {questsOnMap.length === 0 && (
-                      <p className="panel-empty">{t("quests.empty")}</p>
-                    )}
-                    <ul className="quest-list">
-                      {questsOnMap.map((q) => {
-                        const on = selectedQuests.has(q.id);
-                        const guide = guides[q.id];
-                        return (
-                          <li key={q.id} className="quest-li">
-                            <button
-                              className={`quest-item${on ? " active" : ""}`}
-                              aria-pressed={on}
-                              onClick={() => toggleQuest(q)}
-                            >
-                              <span className="quest-name">{q.name}</span>
-                              {q.trader && <span className="quest-trader">{q.trader}</span>}
-                            </button>
-                            {guide && (
-                              <button
-                                className="quest-guide-btn"
-                                title={t("quests.viewGuide")}
-                                aria-label={t("quests.viewGuide")}
-                                onClick={() => openGuide(guide)}
-                              >
-                                ↗
-                              </button>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
+                  <QuestPanel tasks={tasks} config={config} markers={questMarkers}
+                    selected={selectedQuests} completed={completed} guides={guides} player={player}
+                    onToggle={(id) => toggleQuest({ id, zoneId: "" })}
+                    onComplete={toggleCompleted} onFocus={setFocusZoneId} onGuide={openGuide} onClear={() => setSelectedQuests(new Set())} />
                 </>
               )}
 
@@ -389,6 +370,7 @@ function App() {
                   <ol className="story-list">
                     {storyline.map((q, i) => (
                       <li key={q.id} className="story-item">
+                        <input type="checkbox" aria-label={`${t("quests.completed")}: ${q.name}`} checked={completed.has(`story:${q.id}`)} onChange={() => toggleCompleted(`story:${q.id}`)} />
                         <button className="story-btn" title={t("guide.open")} onClick={() => openGuide(q.seoLink)}>
                           <span className="story-num">{i + 1}</span>
                           <span className="story-name">{q.name}</span>
@@ -407,7 +389,7 @@ function App() {
         </div>
 
         <footer className="sidebar-footer">
-          <span>{t("footer.offline")}</span>
+          <DataStatus tasks={tasks} markers={questMarkers} guides={guides} player={player} />
         </footer>
       </aside>
 

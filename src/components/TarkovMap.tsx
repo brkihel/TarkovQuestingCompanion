@@ -1,3 +1,4 @@
+import { addMapArtwork } from "../maps/artwork";
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -114,19 +115,7 @@ export function TarkovMap({
   const lastPlayerFloorRef = useRef<string | null>(null);
   const activeFloorIdRef = useRef(activeFloorId);
   activeFloorIdRef.current = activeFloorId;
-  // SVG inline do mapa (multi-andar): para acender o andar ativo e apagar (alpha)
-  // os outros, controlando a opacidade de cada grupo <g> de andar.
-  const svgRootRef = useRef<SVGSVGElement | null>(null);
-  const ALPHA_INACTIVE = 0.16;
-  const applyFloorOpacity = (root: SVGSVGElement, fls: typeof floors, active: string) => {
-    if (!fls) return;
-    for (const f of fls) {
-      const g = root.querySelector<SVGElement>(`[id="${f.svgGroup}"]`);
-      if (!g) continue;
-      g.style.transition = "opacity 0.2s ease";
-      g.style.opacity = f.id === active ? "1" : String(ALPHA_INACTIVE);
-    }
-  };
+  const artworkRef = useRef<ReturnType<typeof addMapArtwork> | null>(null);
 
   // calibração da seta do jogador (offset em graus, por mapa). Ajustável ao vivo
   // com [ e ] (e \ reseta) quando há jogador no mapa — útil pro Factory.
@@ -174,35 +163,7 @@ export function TarkovMap({
     map.createPane("playerPane").style.zIndex = "700";
     questRendererRef.current = L.svg({ pane: "questPane" });
 
-    let cancelled = false;
-    if (config.svgPath && floors) {
-      // mapa multi-andar: SVG inline para controlar a opacidade de cada andar.
-      fetch(config.svgPath)
-        .then((r) => r.text())
-        .then((txt) => {
-          if (cancelled || mapRef.current !== map) return;
-          const doc = new DOMParser().parseFromString(txt, "image/svg+xml");
-          const svgEl = doc.documentElement as unknown as SVGSVGElement;
-          // estica exatamente pro box (igual ao imageOverlay), senão desalinha.
-          svgEl.setAttribute("preserveAspectRatio", "none");
-          svgRootRef.current = svgEl;
-          L.svgOverlay(svgEl, bounds, { interactive: false }).addTo(map);
-          applyFloorOpacity(svgEl, floors, activeFloorIdRef.current);
-        })
-        .catch(() => {
-          if (!cancelled && config.svgPath) L.imageOverlay(config.svgPath, bounds).addTo(map);
-        });
-    } else if (config.svgPath) {
-      L.imageOverlay(config.svgPath, bounds).addTo(map);
-    } else if (config.tilePath) {
-      L.tileLayer(config.tilePath, {
-        tileSize: config.tileSize,
-        bounds,
-        minZoom: config.minZoom,
-        maxZoom: Math.max(7, config.maxZoom),
-        noWrap: true,
-      }).addTo(map);
-    }
+    artworkRef.current = addMapArtwork(map, config);
     map.fitBounds(bounds);
 
     // fecha o carrossel ao mover/zoom (o ponto na tela fica obsoleto)
@@ -227,8 +188,8 @@ export function TarkovMap({
     mapRef.current = map;
     playerRef.current = null; // marcador do jogador some com o mapa antigo
     return () => {
-      cancelled = true;
-      svgRootRef.current = null;
+      artworkRef.current?.dispose();
+      artworkRef.current = null;
       map.remove();
       mapRef.current = null;
       groupsRef.current.clear();
@@ -238,9 +199,7 @@ export function TarkovMap({
 
   // (A2) acende o andar ativo e apaga (alpha) os outros no SVG inline.
   useEffect(() => {
-    if (svgRootRef.current && floors) {
-      applyFloorOpacity(svgRootRef.current, floors, activeFloorId);
-    }
+    artworkRef.current?.setFloor(activeFloorId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFloorId, config]);
 

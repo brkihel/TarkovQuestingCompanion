@@ -554,6 +554,8 @@ body {
 
 /* ---- Seletor de andar (mapas multi-nível) ---- */
 .floor-switcher {
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
   position: absolute;
   top: 12px;
   right: 12px;
@@ -1594,3 +1596,32 @@ input[type="checkbox"] {
   color: var(--muted);
   line-height: 1.4;
 }
+
+/* Quest planning and local per-mode progress. */
+.quest-panel { display: flex; flex-direction: column; gap: 10px; }
+.quest-filter-row { display: flex; gap: 6px; }
+.quest-filter-row select { min-width: 0; flex: 1; }
+.level-filter { width: 65px; }
+.quest-filter-options { display: flex; flex-wrap: wrap; gap: 7px; font-size: 11px; color: var(--muted); }
+.quest-filter-options label { display: flex; align-items: center; }
+.quest-card { border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+.quest-card.completed .quest-name { text-decoration: line-through; opacity: .6; }
+.quest-no-coordinates { display: block; color: var(--muted); font-size: 10px; padding: 0 7px; }
+.objective-checklist { display: grid; gap: 8px; padding: 8px 4px; font-size: 12px; }
+.objective-checklist label { display: flex; gap: 6px; align-items: flex-start; }
+.objective-checklist input { flex: none; }
+.objective-checklist small { color: var(--muted); }
+.raid-plan { border: 1px solid var(--border); border-radius: 6px; padding: 8px; font-size: 12px; }
+.raid-plan summary { cursor: pointer; color: var(--accent-bright); }
+.raid-plan ul, .visit-list { padding-left: 20px; }
+.visit-list { max-height: 240px; overflow-y: auto; }
+.visit-stop { text-align: left; color: var(--text); background: none; border: 0; cursor: pointer; font: inherit; padding: 5px 0; }
+.visit-stop small { display: block; color: var(--muted); }
+.data-status { display: grid; gap: 3px; font-size: 10px; line-height: 1.4; }
+.data-status summary { cursor: pointer; }
+.data-status .stale { color: #d9a35a; }
+
+.story-item > input { flex: none; }
+
+.story-item { display: flex; align-items: center; }
+.story-item:not(:last-child)::before { left: 36px; }

@@ -1,0 +1,20 @@
+{
+  "verifiedAt": "2026-11-25",
+  "notes": {
+    "reserve/Sewer Manhole": {
+      "source": "https://tarkov.help/en/map/reserve/extractions/ep-sewer-manhole",
+      "en": ["Remove your backpack before extracting."],
+      "pt": ["Remova a mochila antes de extrair."]
+    },
+    "reserve/Cliff Descent": {
+      "source": "https://tarkov.help/en/map/reserve/home",
+      "en": ["Requires Red Rebel ice pick and Paracord. No body armor; armored rigs are allowed."],
+      "pt": ["Exige Red Rebel e Paracord. Sem armadura corporal; coletes táticos blindados são permitidos."]
+    },
+    "interchange/Saferoom Exfil": {
+      "source": "https://tarkov.help/en/map/interchange/home",
+      "en": ["Requires power and Object #11SR keycard activation."],
+      "pt": ["Exige energia e ativação com o cartão Object #11SR."]
+    }
+  }
+}

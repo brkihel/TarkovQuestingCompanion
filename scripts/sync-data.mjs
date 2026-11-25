@@ -1,234 +1,128 @@
-// Script de sincronização de dados e assets (rodar: `npm run sync`).
-//
-// Baixa TUDO da tarkov.dev uma vez e grava localmente, para o app rodar 100%
-// offline / sem depender de terceiros em runtime:
-//   - public/data/tasks.json        quests (para marcadores + lista)
-//   - public/data/map-markers.json  extracts/transits/spawns/loot por mapa
-//   - public/data/meta.json         timestamp + atribuição
-//   - public/maps/svg/<key>.svg     imagem de cada mapa (11 mapas)
-//   - public/maps/tiles/the-labyrinth/{z}/{x}/{y}.png  (único mapa só-tiles)
-//
-// Fonte: tarkov.dev (the-hideout, open-source). Atribuição preservada no meta.
-// Reexecute após patch do jogo para atualizar.
+// Stage current JSON API data and assets before publishing the offline bundle.
+import { join } from 'node:path';
+import { ROOT, json, request, atomicWrite, pool, sources } from './lib/http.mjs';
+import { MODES, LANGUAGES, JSON_API, dataset, normalizeTasks, normalizeMarkers } from './lib/tarkov-data.mjs';
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+const PUBLIC = join(ROOT, 'public');
+const CATALOG_URL = 'https://raw.githubusercontent.com/the-hideout/tarkov-dev/main/src/data/maps.json';
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PUBLIC = join(ROOT, "public");
-const ENDPOINT = "https://api.tarkov.dev/graphql";
-const CDN_SVG = "https://assets.tarkov.dev/maps/svg";
-
-// Mapas: key (= normalizedName das quests) -> nome na API + asset de origem.
-const MAPS = [
-  { key: "customs", api: "Customs", svg: "Customs.svg" },
-  { key: "factory", api: "Factory", svg: "Factory.svg" },
-  { key: "ground-zero", api: "Ground Zero", svg: "GroundZero.svg" },
-  { key: "interchange", api: "Interchange", svg: "Interchange.svg" },
-  { key: "lighthouse", api: "Lighthouse", svg: "Lighthouse.svg" },
-  { key: "reserve", api: "Reserve", svg: "Reserve.svg" },
-  { key: "shoreline", api: "Shoreline", svg: "Shoreline.svg" },
-  { key: "streets-of-tarkov", api: "Streets of Tarkov", svg: "StreetsOfTarkov.svg" },
-  { key: "woods", api: "Woods", svg: "Woods.svg" },
-  { key: "terminal", api: "Terminal", svg: "Terminal.svg" },
-  { key: "the-lab", api: "The Lab", svg: "Labs.svg" },
-  {
-    key: "the-labyrinth",
-    api: "The Labyrinth",
-    tiles: {
-      url: "https://assets.tarkov.dev/maps/labyrinth/main/{z}/{x}/{y}.png",
-      tileSize: 256,
-      minZoom: 1,
-      maxZoom: 5,
-      bounds: [[-52, -37], [53, 76]],
-      transform: [2.115, 85.5, 2.115, 128.0],
-      rotation: 270,
-    },
-  },
-];
-
-async function gql(query) {
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}`);
-  const json = await res.json();
-  if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join("; "));
-  return json.data;
+export function tileRange(config, zoom) {
+  const rad = config.coordinateRotation * Math.PI / 180, scale = 2 ** zoom;
+  const points = config.bounds.flatMap(([x]) => config.bounds.map(([, y]) => {
+    const rx = x * Math.cos(rad) - y * Math.sin(rad), ry = x * Math.sin(rad) + y * Math.cos(rad);
+    return [scale * (config.transform[0] * rx + config.transform[1]),
+      scale * (-config.transform[2] * ry + config.transform[3])];
+  }));
+  return { x0: Math.floor(Math.min(...points.map(p => p[0])) / config.tileSize),
+    x1: Math.ceil(Math.max(...points.map(p => p[0])) / config.tileSize) - 1,
+    y0: Math.floor(Math.min(...points.map(p => p[1])) / config.tileSize),
+    y1: Math.ceil(Math.max(...points.map(p => p[1])) / config.tileSize) - 1 };
 }
 
-// --- categorização de spawn ---
-function spawnKind(s) {
-  const cats = s.categories ?? [];
-  const sides = s.sides ?? [];
-  if (cats.includes("boss")) return "boss";
-  if (cats.includes("sniper")) return "sniper";
-  if ((sides.includes("pmc") || sides.includes("all")) && cats.includes("player")) return "pmc";
-  if (sides.includes("scav")) return "scav";
-  return null;
-}
-
-// --- projeção (porta da matemática do tarkov.dev) p/ enumerar tiles ---
-function projectPixel(xLng, yLat, rotation, transform, scale) {
-  const rad = (rotation * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-  // applyRotation -> latLng(ry, rx); LonLat.project -> Point(lng=rx, lat=ry)
-  const rx = xLng * cos - yLat * sin;
-  const ry = xLng * sin + yLat * cos;
-  const a = transform[0], b = transform[1], c = transform[2] * -1, d = transform[3];
-  return { x: scale * (a * rx + b), y: scale * (c * ry + d) };
-}
-
-function tileRange(t, z) {
-  const scale = Math.pow(2, z);
-  // 4 cantos do retângulo em latLng: lat=y, lng=x
-  const xs = [t.bounds[0][0], t.bounds[1][0]];
-  const ys = [t.bounds[0][1], t.bounds[1][1]];
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const lng of xs) {
-    for (const lat of ys) {
-      const p = projectPixel(lng, lat, t.rotation, t.transform, scale);
-      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+export function buildCatalog(upstream) {
+  return upstream.flatMap(group => {
+    const m = group.maps.find(m => m.projection === 'interactive');
+    if (!m) return [];
+    const config = {
+      key: m.key, name: group.name ?? ({ "streets-of-tarkov": "Streets of Tarkov" }[m.key]) ?? m.key.split('-').map(v => v[0].toUpperCase() + v.slice(1)).join(' '),
+      altKeys: m.altMaps ?? [], svgPath: m.svgPath ? `/maps/svg/${m.key}.svg` : null,
+      tilePath: m.svgPath ? null : `/maps/tiles/${m.key}/main/{z}/{x}/{y}.png`,
+      tileSize: m.tileSize ?? 256, minZoom: m.minZoom, maxZoom: m.maxZoom,
+      maxNativeZoom: m.key === 'icebreaker' ? 3 : m.key === 'the-lab' ? 4 : m.maxZoom,
+      bounds: m.bounds, transform: m.transform, coordinateRotation: m.coordinateRotation,
+      author: m.author, authorLink: m.authorLink, sourceSvg: m.svgPath, sourceTiles: m.tilePath,
+    };
+    if (!m.svgPath && m.layers?.length) {
+      const layers = m.layers.some(l => l.tilePath === m.tilePath) ? m.layers : [
+        { name: 'Ground', tilePath: m.tilePath, show: true, extents: [{ height: m.heightRange }] }, ...m.layers,
+      ];
+      config.floors = layers.map((l, index) => ({
+        id: `floor-${index}`, name: l.name, svgGroup: '', default: !!l.show,
+        min: Math.min(...l.extents.map(e => e.height[0])), max: Math.max(...l.extents.map(e => e.height[1])),
+        tilePath: `/maps/tiles/${m.key}/floor-${index}/{z}/{x}/{y}.png`, sourceTiles: l.tilePath,
+      })).sort((a, b) => b.min - a.min);
+      config.floors[0].max = null;
+      config.floors.at(-1).min = null;
+      for (let i = 0; i < config.floors.length - 1; i++) {
+        const boundary = (config.floors[i].min + config.floors[i + 1].max) / 2;
+        config.floors[i].min = boundary; config.floors[i + 1].max = boundary;
+      }
+      config.tilePath = config.floors.find(f => f.default).tilePath;
     }
-  }
-  return {
-    x0: Math.floor(minX / t.tileSize), x1: Math.floor(maxX / t.tileSize),
-    y0: Math.floor(minY / t.tileSize), y1: Math.floor(maxY / t.tileSize),
-  };
-}
-
-async function downloadBuffer(url) {
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  return Buffer.from(await res.arrayBuffer());
+    return [config];
+  });
 }
 
 async function run() {
-  console.log("→ Buscando dados de mapa da tarkov.dev…");
-  const mapData = await gql(`{
-    maps(lang: en) {
-      normalizedName
-      extracts {
-        name faction position { x y z }
-        switches { id }
-        transferItem { count item { name } }
-      }
-      transits { description position { x y z } }
-      spawns { sides categories position { x y z } }
-      lootContainers { lootContainer { normalizedName } position { x y z } }
+  const catalog = buildCatalog(await json(CATALOG_URL));
+  const pending = [], summary = {};
+  for (const mode of MODES) {
+    console.log(`→ ${mode}: tasks, maps, traders (EN/PT)…`);
+    let englishMaps;
+    for (const lang of LANGUAGES) {
+      const [tasksData, mapData, traders, itemNames] = await Promise.all([
+        dataset(mode, 'tasks', lang), dataset(mode, 'maps', lang), dataset(mode, 'traders', lang),
+        json(`${JSON_API}/${mode}/items_${lang}`),
+      ]);
+      const tasks = normalizeTasks(tasksData, mapData.maps, traders, itemNames.data);
+      if (lang === "en") englishMaps = mapData.maps;
+      const markers = normalizeMarkers(mapData, catalog, itemNames.data, englishMaps, lang);
+      if (tasks.length < 100) throw new Error(`Incomplete task dataset: ${mode}/${lang}`);
+      for (const task of tasks) if (!task.name || /^[a-f0-9]{24} name$/.test(task.name))
+        throw new Error(`Missing task translation: ${task.id}`);
+      const suffix = lang === 'en' ? '' : `-${lang}`;
+      pending.push([join(PUBLIC, 'data', mode, `tasks${suffix}.json`), JSON.stringify(tasks)],
+        [join(PUBLIC, 'data', mode, `map-markers${suffix}.json`), JSON.stringify(markers)]);
+      if (mode === 'regular' && lang === 'en') pending.push(
+        [join(PUBLIC, 'data/tasks.json'), JSON.stringify(tasks)],
+        [join(PUBLIC, 'data/map-markers.json'), JSON.stringify(markers)]);
+      summary[mode] = { tasks: tasks.length, maps: catalog.length };
+      console.log(`  ✓ ${lang}: ${tasks.length} tasks, ${catalog.length} maps`);
     }
-  }`);
-  const byName = new Map(mapData.maps.map((m) => [m.normalizedName, m]));
-
-  const markers = {};
-  for (const cfg of MAPS) {
-    const m = byName.get(cfg.key);
-    if (!m) { console.warn(`  ! sem dados para ${cfg.key}`); continue; }
-    markers[cfg.key] = {
-      extracts: (m.extracts ?? [])
-        .filter((e) => e.position)
-        .map((e) => {
-          const out = { x: e.position.x, y: e.position.y, z: e.position.z, name: e.name, faction: e.faction };
-          // saída paga (taxi): item/valor exigido para extrair
-          if (e.transferItem?.item) out.payment = { item: e.transferItem.item.name, count: e.transferItem.count };
-          // exige acionar uma chave/interruptor
-          if (e.switches?.length) out.needsSwitch = true;
-          // ativada por sinalizador (vem marcado no nome pela tarkov.dev)
-          if (/\(flare\)/i.test(e.name)) out.flare = true;
-          return out;
-        }),
-      transits: (m.transits ?? [])
-        .filter((t) => t.position)
-        .map((t) => ({ x: t.position.x, y: t.position.y, z: t.position.z, description: t.description })),
-      spawns: (m.spawns ?? [])
-        .filter((s) => s.position)
-        .map((s) => ({ x: s.position.x, y: s.position.y, z: s.position.z, kind: spawnKind(s) }))
-        .filter((s) => s.kind),
-      loot: (m.lootContainers ?? [])
-        .filter((l) => l.position && l.lootContainer)
-        .map((l) => ({ x: l.position.x, y: l.position.y, z: l.position.z, type: l.lootContainer.normalizedName })),
-    };
-    const c = markers[cfg.key];
-    console.log(`  ✓ ${cfg.key}: ext=${c.extracts.length} tr=${c.transits.length} spawn=${c.spawns.length} loot=${c.loot.length}`);
   }
-
-  console.log("→ Buscando quests…");
-  const taskData = await gql(`{
-    tasks(lang: en) {
-      id name normalizedName minPlayerLevel kappaRequired wikiLink
-      trader { name }
-      taskRequirements { task { id } status }
-      objectives {
-        __typename id type description optional
-        maps { normalizedName }
-        ... on TaskObjectiveBasic { zones { id position { x y z } map { normalizedName } } }
-        ... on TaskObjectiveQuestItem {
-          zones { id position { x y z } map { normalizedName } }
-          possibleLocations { map { normalizedName } positions { x y z } }
+  for (const config of process.argv.includes("--data-only") ? [] : catalog) {
+    if (config.sourceSvg) {
+      const bytes = await request(config.sourceSvg);
+      if (!bytes.toString('utf8').includes('<svg')) throw new Error(`Invalid SVG: ${config.key}`);
+      pending.push([join(PUBLIC, config.svgPath), bytes]);
+      console.log(`  ✓ ${config.key}: SVG`);
+    } else {
+      for (const floor of config.floors ?? [config]) {
+        const urls = [];
+        for (let z = config.minZoom; z <= config.maxNativeZoom; z++) {
+          const r = tileRange(config, z);
+          for (let x = r.x0; x <= r.x1; x++) for (let y = r.y0; y <= r.y1; y++) {
+            const replace = path => path.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+            urls.push({ url: replace(floor.sourceTiles), path: join(PUBLIC, replace(floor.tilePath)), z });
+          }
         }
-        ... on TaskObjectiveItem { zones { id position { x y z } map { normalizedName } } }
-        ... on TaskObjectiveMark { zones { id position { x y z } map { normalizedName } } }
+        const found = new Set();
+        await pool(urls, async ({ url, path, z }) => {
+          const bytes = await request(url, { missing: true });
+          if (bytes) {
+            if (bytes.length < 8 || bytes.readUInt32BE(0) !== 0x89504e47) throw new Error(`Invalid tile: ${url}`);
+            await atomicWrite(path, bytes); found.add(z);
+          }
+        });
+        for (let z = config.minZoom; z <= config.maxNativeZoom; z++) if (!found.has(z))
+          throw new Error(`No tiles at zoom ${z}: ${config.key}/${floor.id ?? 'main'}`);
+        console.log(`  ✓ ${config.key}/${floor.name ?? 'main'}: tiles z${config.minZoom}–${config.maxNativeZoom}`);
       }
     }
-  }`);
-  console.log(`  ✓ ${taskData.tasks.length} quests`);
-
-  // grava JSONs
-  const dataDir = join(PUBLIC, "data");
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(join(dataDir, "map-markers.json"), JSON.stringify(markers));
-  await writeFile(join(dataDir, "tasks.json"), JSON.stringify(taskData.tasks));
-  await writeFile(
-    join(dataDir, "meta.json"),
-    JSON.stringify({
-      syncedAt: new Date().toISOString(),
-      source: "tarkov.dev (the-hideout, open-source)",
-      attribution: "Dados e mapas SVG por tarkov.dev e autores da comunidade (Shebuka et al.)",
-    }, null, 2),
-  );
-  console.log("  ✓ data/*.json gravados");
-
-  // baixa SVGs
-  console.log("→ Baixando imagens SVG dos mapas…");
-  const svgDir = join(PUBLIC, "maps", "svg");
-  await mkdir(svgDir, { recursive: true });
-  for (const cfg of MAPS) {
-    if (!cfg.svg) continue;
-    const buf = await downloadBuffer(`${CDN_SVG}/${cfg.svg}`);
-    if (!buf) { console.warn(`  ! falhou SVG ${cfg.key}`); continue; }
-    await writeFile(join(svgDir, `${cfg.key}.svg`), buf);
-    console.log(`  ✓ ${cfg.key}.svg (${(buf.length / 1024).toFixed(0)} KB)`);
   }
-
-  // baixa tiles do the-labyrinth
-  const tCfg = MAPS.find((m) => m.tiles);
-  if (tCfg) {
-    console.log("→ Baixando tiles do the-labyrinth…");
-    let ok = 0, miss = 0;
-    for (let z = tCfg.tiles.minZoom; z <= tCfg.tiles.maxZoom; z++) {
-      const r = tileRange(tCfg.tiles, z);
-      for (let x = r.x0; x <= r.x1; x++) {
-        for (let y = r.y0; y <= r.y1; y++) {
-          const url = tCfg.tiles.url.replace("{z}", z).replace("{x}", x).replace("{y}", y);
-          const buf = await downloadBuffer(url);
-          if (!buf) { miss++; continue; }
-          const out = join(PUBLIC, "maps", "tiles", tCfg.key, String(z), String(x), `${y}.png`);
-          await mkdir(dirname(out), { recursive: true });
-          await writeFile(out, buf);
-          ok++;
-        }
-      }
-      console.log(`  z${z}: ${ok} tiles (até agora)`);
-    }
-    console.log(`  ✓ the-labyrinth: ${ok} tiles baixados (${miss} 404 ignorados)`);
-  }
-
-  console.log("\n✅ Sync completo. App pronto para rodar offline.");
+  const publicCatalog = catalog.map(({ sourceSvg, sourceTiles, ...m }) => ({ ...m,
+    ...(m.floors ? { floors: m.floors.map(({ sourceTiles, ...f }) => f) } : {}),
+  }));
+  const meta = { syncedAt: new Date().toISOString(), source: 'tarkov.dev JSON API',
+    attribution: 'Quest data and map artwork by tarkov.dev and credited community authors.', modes: summary,
+    sources: [...sources.values()].sort((a, b) => a.url.localeCompare(b.url)).filter(s => !/\/\d+\/[-\d]+\/[-\d]+\.png$/.test(s.url)),
+  };
+  pending.push([join(ROOT, 'src/maps/catalog.json'), JSON.stringify(publicCatalog, null, 2)],
+    [join(PUBLIC, 'data/meta.json'), JSON.stringify(meta, null, 2)]);
+  for (const [path, bytes] of pending) await atomicWrite(path, bytes);
+  console.log('✓ All modes and maps refreshed. Offline bundle ready.');
 }
 
-run().catch((e) => { console.error("ERRO:", e); process.exit(1); });
+if (process.argv[1]?.replaceAll('\\', '/').endsWith('/sync-data.mjs')) {
+  run().catch(error => { console.error(error); process.exitCode = 1; });
+}

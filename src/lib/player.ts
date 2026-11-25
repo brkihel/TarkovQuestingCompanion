@@ -10,6 +10,8 @@ export interface PlayerPose {
   z: number;
   /** quaternion [qx, qy, qz, qw] do print, ou null se ausente */
   q: [number, number, number, number] | null;
+  /** Timestamp of the confirmed screenshot position, in Unix milliseconds. */
+  observedAt?: number;
 }
 
 /**

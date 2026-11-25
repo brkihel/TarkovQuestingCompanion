@@ -16,12 +16,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -33,6 +33,9 @@ jobs:
 
       - name: Instala dependencias do front
         run: npm ci
+
+      - name: Valida dados, testes e frontend
+        run: npm run check
 
       - name: Build + cria a release com os instaladores
         uses: tauri-apps/tauri-action@v0

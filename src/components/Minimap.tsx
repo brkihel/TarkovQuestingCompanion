@@ -1,3 +1,7 @@
+import { useQuestProgress } from "../lib/useQuestProgress";
+import { progressId } from "../lib/planner";
+import { addMapArtwork } from "../maps/artwork";
+import { floorsForMap, floorForY, showOnFloor } from "../maps/floors";
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -7,11 +11,15 @@ import { getMapByKey } from "../maps/mapsConfig";
 import { getCRS, getBounds, gamePos } from "../maps/leafletCrs";
 import { fetchTasks, markersForMap, type Task } from "../lib/tarkovApi";
 import { displayAngle, playerIcon, headingOffsetFor, type PlayerPose } from "../lib/player";
-import { useT } from "../settings";
+import { useSettings } from "../settings";
 import "./minimap.css";
 
 export function Minimap() {
-  const t = useT();
+  const { t, gameMode, lang } = useSettings();
+  const { completed } = useQuestProgress(gameMode);
+  const completedRef = useRef(completed);
+  completedRef.current = completed;
+  const artworkRef = useRef<ReturnType<typeof addMapArtwork> | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const playerRef = useRef<L.Marker | null>(null);
@@ -20,6 +28,14 @@ export function Minimap() {
   const tasksRef = useRef<Task[] | null>(null);
   const [mapKey, setMapKey] = useState("customs");
   const [selectedQuests, setSelectedQuests] = useState<Set<string>>(new Set());
+  const [positionAge, setPositionAge] = useState<number | null>(null);
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const observed = lastPoseRef.current?.observedAt;
+      setPositionAge(observed ? Math.max(0, Math.floor((Date.now() - observed) / 1000)) : null);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [clickThrough, setClickThrough] = useState(false);
 
   const config = getMapByKey(mapKey);
@@ -37,7 +53,10 @@ export function Minimap() {
     const sel = selectedRef.current;
     const cfg = configRef.current;
     for (const m of markersForMap(tasks, [cfg.key, ...(cfg.altKeys ?? [])])) {
-      if (!sel.has(m.taskId)) continue;
+      if (!sel.has(m.taskId) || completedRef.current.has(progressId(m.taskId, m.objectiveId))) continue;
+      const floors = floorsForMap(cfg.key);
+      const pose = lastPoseRef.current;
+      if (floors && pose && !showOnFloor(floors, floorForY(floors, pose.y).id, m.y)) continue;
       L.circleMarker(gamePos(m.x, m.z) as L.LatLngExpression, {
         radius: 4,
         color: "#c9b471",
@@ -52,6 +71,9 @@ export function Minimap() {
     lastPoseRef.current = pose;
     const map = mapRef.current;
     if (!map) return;
+    const floors = floorsForMap(configRef.current.key);
+    if (floors) artworkRef.current?.setFloor(floorForY(floors, pose.y).id);
+    renderQuestMarkers();
     const angle = displayAngle(pose, configRef.current.coordinateRotation, headingOffsetFor(configRef.current));
     const latlng = gamePos(pose.x, pose.z) as L.LatLngExpression;
     if (!playerRef.current) {
@@ -65,6 +87,7 @@ export function Minimap() {
 
   // (re)constrói o mapa quando o mapa selecionado muda.
   useEffect(() => {
+    lastPoseRef.current = null;
     const el = ref.current;
     if (!el) return;
     const bounds = getBounds(config.bounds);
@@ -78,17 +101,7 @@ export function Minimap() {
       zoomSnap: 0.25,
     });
 
-    if (config.svgPath) {
-      L.imageOverlay(config.svgPath, bounds).addTo(map);
-    } else if (config.tilePath) {
-      L.tileLayer(config.tilePath, {
-        tileSize: config.tileSize,
-        bounds,
-        minZoom: config.minZoom,
-        maxZoom: Math.max(7, config.maxZoom),
-        noWrap: true,
-      }).addTo(map);
-    }
+    artworkRef.current = addMapArtwork(map, config);
     map.setView(bounds.getCenter(), Math.max(config.minZoom, config.maxZoom - 2));
 
     // a janela do minimap começa escondida (tamanho 0); ao exibir, o Leaflet
@@ -110,6 +123,8 @@ export function Minimap() {
 
     return () => {
       ro.disconnect();
+      artworkRef.current?.dispose();
+      artworkRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -124,13 +139,6 @@ export function Minimap() {
     invoke<string[]>("get_selected_quests")
       .then((ids) => setSelectedQuests(new Set(ids)))
       .catch(() => {});
-    fetchTasks()
-      .then((t) => {
-        tasksRef.current = t;
-        renderQuestMarkers();
-      })
-      .catch(() => {});
-
     const unMap = listen<string>("map-selected", (e) => setMapKey(e.payload));
     const unPos = listen<PlayerPose>("player-position", (e) => updatePlayer(e.payload));
     const unQuests = listen<string[]>("quests-selected", (e) =>
@@ -138,18 +146,30 @@ export function Minimap() {
     );
 
     return () => {
-      unMap.then((f) => f());
-      unPos.then((f) => f());
-      unQuests.then((f) => f());
+      unMap.then((f) => f()).catch(() => {});
+      unPos.then((f) => f()).catch(() => {});
+      unQuests.then((f) => f()).catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    tasksRef.current = null;
+    markerLayerRef.current?.clearLayers();
+    fetchTasks(gameMode, lang).then((tasks) => {
+      if (!alive) return;
+      tasksRef.current = tasks;
+      renderQuestMarkers();
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [gameMode, lang]);
 
   // re-desenha quando a seleção (ou o mapa) muda.
   useEffect(() => {
     renderQuestMarkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedQuests, mapKey]);
+  }, [selectedQuests, mapKey, completed]);
 
   async function toggleClickThrough() {
     try {
@@ -171,7 +191,7 @@ export function Minimap() {
     <div className="minimap-root">
       <div className="minimap-bar" data-tauri-drag-region>
         <span className="minimap-title" data-tauri-drag-region>
-          {config.name}
+          {config.name} <small title={t("data.position")}>{positionAge == null ? "—" : `${positionAge}s`}</small>
         </span>
         <div className="minimap-actions">
           <button

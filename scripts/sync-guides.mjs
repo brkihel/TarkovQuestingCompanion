@@ -12,13 +12,12 @@
 // Saída: public/data/quest-guides.json  =>  { taskId(dev): seoLink(EN, help) }
 // Rodar: `npm run sync:guides`. Reexecutar após patch do jogo.
 
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { ROOT, atomicWrite as writeFile, json } from "./lib/http.mjs";
+import { MODES, dataset } from "./lib/tarkov-data.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HELP = "https://api.tarkov.help/api";
-const DEV = "https://api.tarkov.dev/graphql";
 
 // trader (nome en na dev) -> tech name na .help
 const TRADER_TECH = {
@@ -46,32 +45,26 @@ function normRu(s) {
     .trim();
 }
 
-async function gqlTasks(lang, fields) {
-  const res = await fetch(DEV, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: `{ tasks(lang:${lang}){ ${fields} } }` }),
-  });
-  if (!res.ok) throw new Error(`tarkov.dev HTTP ${res.status}`);
-  const j = await res.json();
-  if (j.errors?.length) throw new Error(j.errors.map((e) => e.message).join("; "));
-  return j.data.tasks;
-}
-
 async function listTrader(loc, tech) {
-  const r = await fetch(`${HELP}/${loc}/quests/trader/${tech}`, { headers: { Accept: "application/json" } });
-  if (!r.ok) return null;
-  const j = await r.json();
-  return Array.isArray(j) ? j : j.data;
+  const j = await json(`${HELP}/${loc}/quests/trader/${tech}`);
+  const list = Array.isArray(j) ? j : j.data;
+  if (!Array.isArray(list) || !list.length) throw new Error(`Invalid trader list: ${loc}/${tech}`);
+  return list;
 }
 
 async function run() {
-  console.log("→ tarkov.dev: tasks (en p/ trader + ru p/ nome)…");
-  const en = await gqlTasks("en", "id trader{name}");
-  const ru = await gqlTasks("ru", "id name");
-  const traderById = new Map(en.map((t) => [t.id, t.trader?.name || "?"]));
-  const dev = ru.map((t) => ({ id: t.id, ru: t.name, trader: traderById.get(t.id) }));
-  console.log(`  ✓ ${dev.length} tasks`);
+  console.log("→ tarkov.dev JSON: tasks from all game modes (EN/RU)…");
+  const byId = new Map();
+  for (const mode of MODES) {
+    const [en, ru, traders] = await Promise.all([
+      dataset(mode, "tasks", "en"), dataset(mode, "tasks", "ru"), dataset(mode, "traders", "en"),
+    ]);
+    for (const t of Object.values(en.tasks)) byId.set(t.id, {
+      id: t.id, ru: ru.tasks[t.id]?.name, trader: traders[t.trader]?.name,
+    });
+  }
+  const dev = [...byId.values()];
+  console.log(`  ✓ ${dev.length} unique tasks`);
 
   console.log("→ tarkov.help: quests por trader (en+ru, junta por quest_id)…");
   // mapa: `${tech} ${normRu(nomeRu)}` -> seoLink(EN)

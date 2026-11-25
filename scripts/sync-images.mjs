@@ -16,25 +16,23 @@
 //
 // Rodar: `npm run sync:images` (depois de `npm run sync` e `npm run sync:guides`).
 
-import { mkdir, writeFile, readFile, access } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import sharp from "sharp";
+import { mkdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { ROOT, atomicWrite as writeFile, request } from "./lib/http.mjs";
+import { outName, downloadQuestImage } from "./lib/quest-images.mjs";
+import { MODES } from "./lib/tarkov-data.mjs";
 
 // O viewer mostra no máximo ~760px; redimensionamos pra ~900px webp para o app
 // ficar offline sem inchar (full-res seriam ~214 MB; assim cai pra ~30 MB).
-const MAX_WIDTH = 900;
-const WEBP_QUALITY = 72;
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const HELP = "https://api.tarkov.help/api";
 const OUT_DIR = join(ROOT, "public", "quest-images");
 const PUBLIC_PREFIX = "/quest-images";
 
 async function getDetail(seo) {
-  const r = await fetch(`${HELP}/en/quests/${seo}`, { headers: { Accept: "application/json" } });
-  if (!r.ok) return null;
-  const j = await r.json();
+  const bytes = await request(`${HELP}/en/quests/${seo}`, { missing: true });
+  if (!bytes) return null;
+  const j = JSON.parse(bytes.toString("utf8"));
   return j.data !== undefined ? j.data : j;
 }
 
@@ -70,10 +68,7 @@ function parseBlocks(html) {
 }
 
 // nome de saída: sempre .webp (re-encodamos), a partir do nome original.
-function outName(u) {
-  const base = u.split("/").pop().split("?")[0];
-  return base.replace(/\.[a-z0-9]+$/i, "") + ".webp";
-}
+
 
 const STOP = new Set([
   "the", "and", "for", "with", "near", "from", "your", "you", "find", "place",
@@ -111,10 +106,7 @@ function geoObjectives(task) {
 }
 
 // casa cada imagem do guia a um objetivo geolocalizado da task -> { objId: [url] }.
-// Estratégia (privilegiando COBERTURA, aceitando algum erro): (1) casa cada
-// imagem ao objetivo com maior overlap de texto; (2) preenche os objetivos que
-// sobraram, por ORDEM, com as imagens ainda livres (a ordem das imagens no guia
-// costuma seguir a dos objetivos).
+// Ambiguous images remain in the task carousel; never guess by image order.
 function matchImagesToObjectives(task, blocks) {
   const geo = geoObjectives(task);
   const out = {};
@@ -135,22 +127,19 @@ function matchImagesToObjectives(task, blocks) {
     if (!bTok.size) return;
     let best = null;
     let bestScore = 0;
+    let tied = false;
     for (const o of objTokens) {
       const sc = overlap(bTok, o.set);
       if (sc > bestScore) {
         bestScore = sc;
         best = o.id;
+        tied = false;
+      } else if (sc === bestScore) {
+        tied = true;
       }
     }
-    if (best && bestScore >= 1) assigned[bi] = best;
+    if (best && bestScore >= 2 && !tied) assigned[bi] = best;
   });
-
-  // (2) objetivos ainda sem imagem recebem, por ordem, as imagens livres.
-  const emptyObjs = geo.map((o) => o.id).filter((id) => !assigned.includes(id));
-  const freeImgs = blocks.map((_, i) => i).filter((i) => assigned[i] == null);
-  for (let k = 0; k < emptyObjs.length && k < freeImgs.length; k++) {
-    assigned[freeImgs[k]] = emptyObjs[k];
-  }
 
   blocks.forEach((b, bi) => {
     if (assigned[bi]) (out[assigned[bi]] ??= []).push(b.url);
@@ -158,31 +147,20 @@ function matchImagesToObjectives(task, blocks) {
   return out;
 }
 
-async function exists(p) {
-  try {
-    await access(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function download(url, dest) {
-  if (await exists(dest)) return true;
-  const r = await fetch(url);
-  if (!r.ok) return false;
-  const buf = Buffer.from(await r.arrayBuffer());
-  await sharp(buf)
-    .resize({ width: MAX_WIDTH, withoutEnlargement: true })
-    .webp({ quality: WEBP_QUALITY })
-    .toFile(dest);
-  return true;
-}
-
 async function run() {
   const guides = JSON.parse(await readFile(join(ROOT, "public", "data", "quest-guides.json"), "utf8")).guides;
-  const tasks = JSON.parse(await readFile(join(ROOT, "public", "data", "tasks.json"), "utf8"));
-  const taskById = new Map(tasks.map((t) => [t.id, t]));
+  const tasks = (await Promise.all(MODES.map(async (mode) => JSON.parse(
+    await readFile(join(ROOT, "public", "data", mode, "tasks.json"), "utf8"),
+  )))).flat();
+  const taskById = new Map();
+  for (const task of tasks) {
+    const existing = taskById.get(task.id);
+    if (!existing) taskById.set(task.id, { ...task, objectives: [...task.objectives] });
+    else {
+      const known = new Set(existing.objectives.map((o) => o.id));
+      existing.objectives.push(...task.objectives.filter((o) => !known.has(o.id)));
+    }
+  }
 
   const taskIds = Object.keys(guides);
   const seoToTasks = new Map();
@@ -198,7 +176,7 @@ async function run() {
   // Modo LOCAL (LOCAL=1): reconstrói o JSON a partir do guide-content.json já
   // baixado (sem rede; imagens já estão em public/quest-images/). Útil para
   // reprocessar o casamento imagem<->objetivo sem re-raspar o tarkov.help.
-  const LOCAL = process.env.LOCAL === "1";
+  const LOCAL = process.env.LOCAL !== "0";
   const seoBlocks = new Map(); // seo -> [{url(public), text}]
 
   if (LOCAL) {
@@ -218,7 +196,7 @@ async function run() {
     let i = 0;
     for (const seo of seoToTasks.keys()) {
       i++;
-      const d = await getDetail(seo).catch(() => null);
+      const d = await getDetail(seo);
       if (!d) continue;
       const blocks = parseBlocks(d.guide);
       if (!blocks.length) continue;
@@ -241,7 +219,7 @@ async function run() {
     for (let k = 0; k < entries.length; k += CONC) {
       const batch = entries.slice(k, k + CONC);
       const res = await Promise.all(
-        batch.map(([name, url]) => download(url, join(OUT_DIR, name)).catch(() => false)),
+        batch.map(([name, url]) => downloadQuestImage(url, join(OUT_DIR, name)).catch(() => false)),
       );
       for (const r of res) r ? ok++ : fail++;
       if ((k / CONC) % 10 === 0) console.log(`  baixadas ${ok}/${toDownload.size} (${fail} falhas)`);
@@ -257,6 +235,7 @@ async function run() {
     const paths = blocks.map((b) => b.url);
     const dedup = (arr) => [...new Set(arr)];
     for (const id of seoToTasks.get(seo)) {
+      if (!taskById.has(id)) continue;
       byTask[id] = dedup(paths);
       const task = taskById.get(id);
       if (!task) continue;
